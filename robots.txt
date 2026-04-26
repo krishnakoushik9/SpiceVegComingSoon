@@ -1,0 +1,4 @@
+# Spice Veg Agri a company site handled by whitegeekdevils organisation : legion = dev name
+
+User-agent: *
+Allow: /

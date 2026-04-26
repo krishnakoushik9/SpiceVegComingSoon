@@ -1,0 +1,8 @@
+/* TEAM */
+Chef: legion
+Organization: whitegeekdevils
+
+/* SITE */
+Site: Spice Veg Agri
+Domain: spiceveg.in
+Forwarding to: https://krishnakoushik9.github.io/SpiceVegComingSoon/
