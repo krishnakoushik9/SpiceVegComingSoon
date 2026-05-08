@@ -27,12 +27,12 @@ jobs:
         run: pnpm run build
         
       - name: Deploy Worker
-        run: |
-          cd apps/worker
-          pnpm run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/worker
+          command: deploy
           
       - name: Deploy Frontend (Pages)
         uses: cloudflare/wrangler-action@v3
