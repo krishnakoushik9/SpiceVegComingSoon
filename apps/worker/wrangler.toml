@@ -1,0 +1,19 @@
+name = "spice-veg-worker"
+main = "src/index.ts"
+compatibility_date = "2024-05-29"
+
+# [vars]
+# MY_VARIABLE = "my-variable"
+
+# [[kv_namespaces]]
+# binding = "MY_KV_NAMESPACE"
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# [[r2_buckets]]
+# binding = "MY_BUCKET"
+# bucket_name = "my-bucket"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "spice-veg-db"
+# database_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
