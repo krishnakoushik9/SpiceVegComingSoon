@@ -1,9 +1,10 @@
 name = "spice-veg-worker"
-main = "src/index.ts"
+main = "apps/worker/src/index.ts"
 compatibility_date = "2024-05-29"
+compatibility_flags = ["nodejs_compat"]
 
 # [vars]
-# MY_VARIABLE = "my-variable"
+# NEXT_PUBLIC_API_URL = "https://spiceveg.in"
 
 # [[kv_namespaces]]
 # binding = "MY_KV_NAMESPACE"
