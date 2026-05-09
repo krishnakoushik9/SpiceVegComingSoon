@@ -3,6 +3,14 @@ main = "apps/worker/src/index.ts"
 compatibility_date = "2024-05-29"
 compatibility_flags = ["nodejs_compat"]
 
+[[routes]]
+pattern = "spiceveg.in"
+custom_domain = true
+
+[[routes]]
+pattern = "www.spiceveg.in"
+custom_domain = true
+
 # [vars]
 # NEXT_PUBLIC_API_URL = "https://spiceveg.in"
 
