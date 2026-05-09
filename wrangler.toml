@@ -4,25 +4,8 @@ compatibility_date = "2024-05-29"
 compatibility_flags = ["nodejs_compat"]
 
 [[routes]]
-pattern = "spiceveg.in"
-custom_domain = true
-
-[[routes]]
-pattern = "www.spiceveg.in"
+pattern = "api.spiceveg.in"
 custom_domain = true
 
 # [vars]
-# NEXT_PUBLIC_API_URL = "https://spiceveg.in"
-
-# [[kv_namespaces]]
-# binding = "MY_KV_NAMESPACE"
-# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# [[r2_buckets]]
-# binding = "MY_BUCKET"
-# bucket_name = "my-bucket"
-
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "spice-veg-db"
-# database_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# NEXT_PUBLIC_API_URL = "https://api.spiceveg.in"
