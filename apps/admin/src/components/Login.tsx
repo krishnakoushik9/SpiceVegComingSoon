@@ -1,89 +1,55 @@
-"use client";
-import React, { useState } from 'react';
-import { Package, Lock, Loader2 } from 'lucide-react';
+"use client"
+import { useState } from "react"
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [pos, setPos] = useState(0)
+  const trackWidth = 280
+  const thumbWidth = 56
+  const maxSlide = trackWidth - thumbWidth - 8
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Hardcoded bypass for emergency access
-    if (password === 'srikanthadmin') {
-      alert('Default pin entered');
-      window.location.reload();
-      return;
-    }
+  const onDrag = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX
+    const track = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect()
+    const newPos = Math.min(Math.max(0, clientX - track.left - thumbWidth / 2), maxSlide)
+    setPos(newPos)
+  }
 
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        alert('Invalid credentials');
-      }
-    } catch (e) {
-      alert('Login failed');
-    } finally {
-      setIsLoading(false);
+  const onRelease = () => {
+    if (pos >= maxSlide * 0.85) {
+      setPos(maxSlide)
+      setTimeout(() => {
+        localStorage.setItem("admin-token", "admin-token")
+        window.location.href = "/"
+      }, 400)
+    } else {
+      setPos(0)
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-leaf rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-leaf/20">
-            <Package size={32} />
-          </div>
-          <h1 className="font-display font-bold text-2xl">SpiceVeg Admin</h1>
-          <p className="text-stone-400 text-sm mt-1">Sign in to manage seed labels</p>
-        </div>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#111" }}>
+      <div style={{ fontSize: 64, marginBottom: 16 }}>🌿</div>
+      <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 700, marginBottom: 4 }}>SpiceVeg Admin</h1>
+      <p style={{ color: "#888", marginBottom: 48 }}>Slide to enter</p>
 
-        <form onSubmit={handleLogin} className="card space-y-4">
-          <div>
-            <label className="text-sm font-medium text-stone-600 mb-1 block">Username</label>
-            <input 
-              type="text" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input-field" 
-              placeholder="Enter username" 
-              required
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-stone-600 mb-1 block">Password</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field" 
-              placeholder="••••••••" 
-              required
-            />
-          </div>
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
-          >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Lock size={18} />}
-            Sign In
-          </button>
-        </form>
-        
-        <p className="text-center mt-8 text-[10px] text-stone-300 uppercase tracking-widest">
-          Secure Internal Access Only
-        </p>
+      <div style={{ position: "relative", width: trackWidth, height: 56, background: "#222", borderRadius: 999, display: "flex", alignItems: "center", paddingLeft: 4, paddingRight: 4, userSelect: "none" }}>
+        <span style={{ position: "absolute", width: "100%", textAlign: "center", color: "#555", fontSize: 14, pointerEvents: "none" }}>
+          slide to enter →
+        </span>
+        <div
+          onMouseDown={(e) => {
+            const move = (ev: MouseEvent) => onDrag({ ...e, clientX: ev.clientX } as any)
+            const up = () => { onRelease(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up) }
+            window.addEventListener("mousemove", move)
+            window.addEventListener("mouseup", up)
+          }}
+          onTouchMove={onDrag}
+          onTouchEnd={onRelease}
+          style={{ width: thumbWidth, height: 48, background: "#3a7d44", borderRadius: 999, cursor: "grab", transform: `translateX(${pos}px)`, transition: pos === 0 || pos === maxSlide ? "transform 0.3s" : "none", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}
+        >
+          →
+        </div>
       </div>
     </div>
-  );
+  )
 }

@@ -12,29 +12,12 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'new' | 'list'>('new');
   const [labels, setLabels] = useState<SeedLabel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [printData, setPrintData] = useState<{ data: SeedLabel; shortUrl: string } | null>(null);
   const [editingLabel, setEditingLabel] = useState<SeedLabel | undefined>();
 
-  // Fetch labels and check auth on load
   useEffect(() => {
-    checkAuth();
+    fetchLabels();
   }, []);
-
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/v1/auth/me');
-      if (res.ok) {
-        setIsLoggedIn(true);
-        fetchLabels();
-      }
-    } catch (e) {
-      console.error('Auth check failed');
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
 
   const fetchLabels = async () => {
     try {
@@ -79,20 +62,8 @@ export default function AdminPage() {
 
   const handleLogout = async () => {
     await fetch('/api/v1/auth/logout', { method: 'POST' });
-    window.location.reload();
+    window.location.href = "/";
   };
-
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50">
-        <Loader2 className="animate-spin text-leaf" size={40} />
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return <LoginPage />;
-  }
 
   return (
     <div className="min-h-screen flex flex-col max-w-lg mx-auto bg-stone-50">
