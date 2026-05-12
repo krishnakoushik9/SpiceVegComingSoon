@@ -13,13 +13,7 @@ export default function LoginPage() {
     // Hardcoded bypass for emergency access
     if (password === 'srikanthadmin') {
       alert('Default pin entered');
-      // For bypass, we simulate a successful login response or redirect
-      // Since the app depends on the /api/v1/auth/me check, 
-      // we might need to actually log in or set a local flag if we were building a full auth client,
-      // but given the current app structure, this alert satisfies the requirement.
-      // Note: This bypass only works if the backend also accepts it, 
-      // which it doesn't currently. I will now update the backend.
-      setIsLoggedIn(true); // Assuming the AdminPage component manages state
+      window.location.reload();
       return;
     }
 
