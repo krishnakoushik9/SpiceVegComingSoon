@@ -23,30 +23,6 @@ app.use('*', cors({
   credentials: true,
 }))
 
-// --- MULTI-DOMAIN ASSET ROUTING ---
-app.use('*', async (c, next) => {
-  const url = new URL(c.req.url)
-  const hostname = url.hostname
-
-  // If it's an API call or short link slug (except the root), continue to routes
-  if (url.pathname.startsWith('/api/') || (url.pathname.length > 1 && hostname === 's.spiceveg.in')) {
-    return next()
-  }
-
-  // Handle root and static files based on hostname
-  if (hostname === 'admin.spiceveg.in') {
-    // Serve admin frontend
-    const path = url.pathname === '/' ? '/admin/index.html' : `/admin${url.pathname}`
-    return fetch(new Request(new URL(path, url.origin)))
-  } else if (hostname === 'spiceveg.in' || hostname === 'www.spiceveg.in' || hostname === 'verify.spiceveg.in') {
-    // Serve web frontend
-    const path = url.pathname === '/' ? '/web/index.html' : `/web${url.pathname}`
-    return fetch(new Request(new URL(path, url.origin)))
-  }
-
-  return next()
-})
-
 // --- URL SHORTENER REDIRECT ENGINE ---
 app.get('/:slug', async (c) => {
   const slug = c.req.param('slug')

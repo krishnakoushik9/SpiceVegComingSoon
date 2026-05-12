@@ -1,44 +1,23 @@
-name = "spicevegsite"
+name = "spiceveg-api"
 main = "apps/worker/src/index.ts"
 compatibility_date = "2024-05-29"
 compatibility_flags = ["nodejs_compat"]
-
-# Static Assets (Next.js)
-assets = { directory = "./dist" }
 
 # KV Namespace for URL Shortener
 [[kv_namespaces]]
 binding = "SHORT_LINKS"
 id = "5a72f612e8a84905bb99c528eabb798a"
 
-[[routes]]
-pattern = "spiceveg.in"
-custom_domain = true
-
-[[routes]]
-pattern = "www.spiceveg.in"
-custom_domain = true
-
-[[routes]]
-pattern = "api.spiceveg.in"
-custom_domain = true
-
-[[routes]]
-pattern = "s.spiceveg.in"
-custom_domain = true
-
-[[routes]]
-pattern = "admin.spiceveg.in"
-custom_domain = true
+routes = [
+	{ pattern = "api.spiceveg.in", custom_domain = true },
+	{ pattern = "s.spiceveg.in", custom_domain = true }
+]
 
 [vars]
 NEXT_PUBLIC_API_URL = "https://api.spiceveg.in"
-# LEGACY FIREBASE CONFIGURATION (Verified from Spice55/app.js)
 FIREBASE_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4"
 FIREBASE_PROJECT_ID = "spice-veg-agri"
 FIREBASE_COLLECTION = "seed_labels"
-# ROUTING CONFIGURATION
 VERIFY_BASE_URL = "https://verify.spiceveg.in"
 SHORT_DOMAIN = "https://s.spiceveg.in"
-# AUTH CONFIGURATION
 ADMIN_USERNAME = "srikanth"

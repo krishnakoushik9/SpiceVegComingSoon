@@ -3,7 +3,10 @@
   "private": true,
   "packageManager": "pnpm@9.1.0",
   "scripts": {
-    "build": "turbo build && rm -rf dist && mkdir -p dist/admin dist/web && cp -r apps/admin/out/* dist/admin/ && cp -r apps/web/out/* dist/web/",
+    "build": "turbo build",
+    "deploy:web": "cd apps/web && npx wrangler pages deploy out --project-name=spiceveg-web",
+    "deploy:admin": "cd apps/admin && npx wrangler pages deploy out --project-name=spiceveg-admin",
+    "deploy:api": "cd apps/worker && npx wrangler deploy",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
