@@ -1,20 +1,27 @@
 "use client"
-import { useState } from "react"
+import { useState, useRef } from "react"
 
 export default function LoginPage() {
   const [pos, setPos] = useState(0)
-  const trackWidth = 280
-  const thumbWidth = 56
-  const maxSlide = trackWidth - thumbWidth - 8
+  const dragging = useRef(false)
+  const startX = useRef(0)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const maxSlide = 220
 
-  const onDrag = (e: React.TouchEvent | React.MouseEvent) => {
-    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX
-    const track = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect()
-    const newPos = Math.min(Math.max(0, clientX - track.left - thumbWidth / 2), maxSlide)
+  const onPointerDown = (e: React.PointerEvent) => {
+    dragging.current = true
+    startX.current = e.clientX - pos
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return
+    const newPos = Math.min(Math.max(0, e.clientX - startX.current), maxSlide)
     setPos(newPos)
   }
 
-  const onRelease = () => {
+  const onPointerUp = () => {
+    dragging.current = false
     if (pos >= maxSlide * 0.85) {
       setPos(maxSlide)
       setTimeout(() => {
@@ -27,25 +34,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#111" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0d0d0d" }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🌿</div>
-      <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 700, marginBottom: 4 }}>SpiceVeg Admin</h1>
-      <p style={{ color: "#888", marginBottom: 48 }}>Slide to enter</p>
+      <h1 style={{ color: "#fff", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>SpiceVeg Admin</h1>
+      <p style={{ color: "#666", marginBottom: 56, fontSize: 15 }}>Slide to enter</p>
 
-      <div style={{ position: "relative", width: trackWidth, height: 56, background: "#222", borderRadius: 999, display: "flex", alignItems: "center", paddingLeft: 4, paddingRight: 4, userSelect: "none" }}>
-        <span style={{ position: "absolute", width: "100%", textAlign: "center", color: "#555", fontSize: 14, pointerEvents: "none" }}>
+      <div ref={trackRef} style={{ position: "relative", width: 280, height: 56, background: "#1a1a1a", borderRadius: 999, display: "flex", alignItems: "center", padding: "0 4px", border: "1px solid #2a2a2a" }}>
+        <span style={{ position: "absolute", width: "100%", textAlign: "center", color: "#444", fontSize: 13, pointerEvents: "none", userSelect: "none" }}>
           slide to enter →
         </span>
         <div
-          onMouseDown={(e) => {
-            const move = (ev: MouseEvent) => onDrag({ ...e, clientX: ev.clientX } as any)
-            const up = () => { onRelease(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up) }
-            window.addEventListener("mousemove", move)
-            window.addEventListener("mouseup", up)
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          style={{
+            width: 48,
+            height: 48,
+            background: "#2d7a3a",
+            borderRadius: 999,
+            cursor: "grab",
+            transform: `translateX(${pos}px)`,
+            transition: dragging.current ? "none" : "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontSize: 20,
+            touchAction: "none",
+            userSelect: "none"
           }}
-          onTouchMove={onDrag}
-          onTouchEnd={onRelease}
-          style={{ width: thumbWidth, height: 48, background: "#3a7d44", borderRadius: 999, cursor: "grab", transform: `translateX(${pos}px)`, transition: pos === 0 || pos === maxSlide ? "transform 0.3s" : "none", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}
         >
           →
         </div>
