@@ -9,7 +9,7 @@ assets = { directory = "./apps/web/out" }
 # KV Namespace for URL Shortener
 [[kv_namespaces]]
 binding = "SHORT_LINKS"
-id = "replace-with-actual-id-later"
+id = "5a72f612e8a84905bb99c528eabb798a"
 
 [[routes]]
 pattern = "spiceveg.in"
