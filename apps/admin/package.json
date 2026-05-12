@@ -1,27 +1,26 @@
 {
-  "name": "web",
+  "name": "admin",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "lint": "next lint"
   },
   "dependencies": {
     "next": "15.0.0-rc.0",
     "react": "19.0.0-rc.0",
     "react-dom": "19.0.0-rc.0",
-    "framer-motion": "^11.2.10",
     "lucide-react": "^0.395.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
     "class-variance-authority": "^0.7.0",
-    "zustand": "^4.5.2",
-    "@hookform/resolvers": "^3.6.0",
     "react-hook-form": "^7.51.5",
+    "@hookform/resolvers": "^3.6.0",
     "zod": "^3.23.8",
+    "qrcode.react": "^3.1.0",
+    "date-fns": "^3.6.0",
     "@spiceveg/types": "workspace:*"
   },
   "devDependencies": {

@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --forest: #1A2410;
+  --leaf: #3B6D11;
+  --sage: #C0DD97;
+  --cream: #FDFCF8;
+}
+
+@layer base {
+  body {
+    @apply bg-cream text-forest selection:bg-leaf selection:text-white;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-leaf text-white px-6 py-3 rounded-xl font-medium shadow-sm hover:bg-forest transition-all active:scale-95 disabled:opacity-50;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:ring-2 focus:ring-leaf focus:border-transparent outline-none transition-all;
+  }
+
+  .card {
+    @apply bg-white border border-stone-100 rounded-2xl p-6 shadow-sm;
+  }
+}
+
+/* Print Overrides */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  @page {
+    margin: 0;
+    size: 60mm auto;
+  }
+}
