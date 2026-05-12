@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.1.0",
   "scripts": {
-    "build": "turbo build",
+    "build": "turbo build && rm -rf dist && mkdir -p dist/admin dist/web && cp -r apps/admin/out/* dist/admin/ && cp -r apps/web/out/* dist/web/",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
