@@ -31,13 +31,14 @@ app.get('/:slug', async (c) => {
   const data = await c.env.SHORT_LINKS.get<ShortLinkMetadata>(slug, 'json')
   if (data) return c.redirect(data.url, 302)
 
-  return c.html(`
-    <div style="font-family: sans-serif; text-align: center; padding: 50px;">
-      <h1>Link Not Found</h1>
-      <p>The short link you followed is invalid or has expired.</p>
-      <a href="https://spiceveg.in" style="color: #3B6D11;">Go to SpiceVeg.in</a>
-    </div>
-  `, 404)
+  return c.notFound()
+})
+
+app.get('/qr/:slug', async (c) => {
+  const slug = c.req.param('slug')
+  const data = await c.env.SHORT_LINKS.get<ShortLinkMetadata>(slug, 'json')
+  if (data) return c.redirect(data.url, 302)
+  return c.notFound()
 })
 
 // --- API SUB-APP ---
