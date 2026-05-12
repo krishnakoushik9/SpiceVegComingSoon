@@ -38,15 +38,15 @@ app.use('*', async (c, next) => {
   if (hostname === 'admin.spiceveg.in') {
     // Serve admin frontend
     if (url.pathname === '/' || url.pathname === '/index.html') {
-      return c.env.ASSETS.fetch(new URL('/admin/index.html', url.origin))
+      return c.env.ASSETS.fetch(new Request(new URL('/admin/index.html', url.origin)))
     }
-    return c.env.ASSETS.fetch(new URL(`/admin${url.pathname}`, url.origin))
+    return c.env.ASSETS.fetch(new Request(new URL(`/admin${url.pathname}`, url.origin)))
   } else if (hostname === 'spiceveg.in' || hostname === 'www.spiceveg.in' || hostname === 'verify.spiceveg.in') {
     // Serve web frontend
     if (url.pathname === '/' || url.pathname === '/index.html') {
-      return c.env.ASSETS.fetch(new URL('/web/index.html', url.origin))
+      return c.env.ASSETS.fetch(new Request(new URL('/web/index.html', url.origin)))
     }
-    return c.env.ASSETS.fetch(new URL(`/web${url.pathname}`, url.origin))
+    return c.env.ASSETS.fetch(new Request(new URL(`/web${url.pathname}`, url.origin)))
   }
 
   return next()
