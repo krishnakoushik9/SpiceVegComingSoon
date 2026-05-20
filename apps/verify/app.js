@@ -1,0 +1,524 @@
+// --- CONFIG & CONSTANTS ---
+const VERSION = '1.0.7';
+const LAST_UPDATED = 'Apr 24, 2026 12:10 PM';
+const FB = {
+    apiKey: "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4",
+    projectId: "spice-veg-agri"
+};
+const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB.projectId}/databases/(default)/documents`;
+const COLLECTION = 'seed_labels';
+let CURRENT_LABELS = [];
+let EDIT_MODE = false;
+let IS_LOW_SPEED = false;
+
+// --- SPEED TEST AGENT ---
+async function runSpeedTest() {
+    const startTime = performance.now();
+    try {
+        // Fetch a small resource to test latency/speed
+        await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-store' });
+        const duration = performance.now() - startTime;
+        // If it takes more than 1.5s to fetch a favicon, consider it low speed
+        if (duration > 1500) IS_LOW_SPEED = true;
+    } catch (e) {
+        IS_LOW_SPEED = true; // Assume low speed on error
+    }
+    console.log('Speed Test:', IS_LOW_SPEED ? 'LOW' : 'NORMAL');
+}
+
+// --- UPDATE AGENT ---
+async function checkUpdates() {
+    try {
+        const res = await fetch(`https://raw.githubusercontent.com/krishnakoushik9/Spice-Veg-Agri-Customer/main/app.js?t=${Date.now()}`, { cache: 'no-store' });
+        const text = await res.text();
+        const match = text.match(/const VERSION = '([\d.]+)'/);
+        if (match && match[1] !== VERSION) {
+            console.log(`Update available: ${match[1]} (Current: ${VERSION})`);
+        }
+    } catch (e) {}
+}
+
+// --- IMAGE AGENT ---
+function handleImageLoad(img) {
+    if (IS_LOW_SPEED) {
+        img.dataset.src = img.src;
+        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='; // 1x1 transparent
+        img.style.cursor = 'pointer';
+        img.style.filter = 'grayscale(100%) blur(2px)';
+        img.onclick = function() {
+            this.src = this.dataset.src;
+            this.style.filter = 'none';
+        };
+        const label = document.createElement('div');
+        label.innerText = 'Tap to load image';
+        label.style.fontSize = '10px';
+        label.style.color = 'var(--text-muted)';
+        img.parentNode.insertBefore(label, img.nextSibling);
+    }
+}
+
+// --- FIRESTORE HELPERS ---
+async function fsSet(collection, docId, data) {
+    const fields = {};
+    for (const [k, v] of Object.entries(data)) {
+        fields[k] = { stringValue: String(v) };
+    }
+    const url = `${FS_BASE}/${collection}/${docId}?key=${FB.apiKey}`;
+    const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+    });
+    return res.json();
+}
+
+async function fsGet(collection, docId) {
+    const url = `${FS_BASE}/${collection}/${docId}?key=${FB.apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const doc = await res.json();
+    const out = {};
+    if (doc.fields) {
+        for (const [k, v] of Object.entries(doc.fields)) {
+            out[k] = v.stringValue ?? v.integerValue ?? v.booleanValue ?? '';
+        }
+    }
+    return out;
+}
+
+async function fsList(collection) {
+    const url = `${FS_BASE}/${collection}?key=${FB.apiKey}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.documents) return [];
+    return json.documents.map(doc => {
+        const out = { _id: doc.name.split('/').pop() };
+        for (const [k, v] of Object.entries(doc.fields || {})) {
+            out[k] = v.stringValue ?? v.integerValue ?? '';
+        }
+        return out;
+    }).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// --- AUTHENTICATION ---
+async function _syncPrefs(u, p) {
+    const _s1 = "spice"; const _s2 = "veg_"; const _s3 = "agri_"; const _s4 = "2026";
+    const salt = _s1 + _s2 + _s3 + _s4;
+    const enc = new TextEncoder();
+    const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(p + salt));
+    const hashHex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const _h = "d7bb384d861b2c7cb8e5ed859057352f0222646af808fd361a46c3a6710b9a82";
+    return u.toLowerCase() === "srikanth" && hashHex === _h;
+}
+
+async function doLogin() {
+    const u = document.getElementById('login-user').value;
+    const p = document.getElementById('login-pass').value;
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.textContent = 'Verifying...';
+    
+    const ok = await _syncPrefs(u, p);
+    if (ok) {
+        sessionStorage.setItem('_sv_auth', '1');
+        showAdmin();
+    } else {
+        document.getElementById('login-err').style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Sign In';
+    }
+}
+
+function doLogout() {
+    sessionStorage.removeItem('_sv_auth');
+    window.location.reload();
+}
+
+function togglePassword() {
+    const el = document.getElementById('login-pass');
+    el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// --- ROUTER & NAVIGATION ---
+async function detectMode() {
+    await runSpeedTest();
+    checkUpdates();
+    initStatus();
+    
+    // Apply speed test to existing images
+    document.querySelectorAll('img:not(.no-lazy)').forEach(handleImageLoad);
+
+    const params = new URLSearchParams(window.location.search);
+    const labelId = params.get('id');
+    if (labelId) {
+        loadCustomerView(labelId);
+    } else {
+        if (sessionStorage.getItem('_sv_auth') === '1') {
+            showAdmin();
+        } else {
+            showPage('login-page');
+            hideSpinner();
+        }
+    }
+}
+
+function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+    document.getElementById(id).style.display = 'block';
+    window.scrollTo(0,0);
+}
+
+function switchTab(tab) {
+    document.getElementById('tab-new').style.display = tab === 'new' ? 'block' : 'none';
+    document.getElementById('tab-list').style.display = tab === 'list' ? 'block' : 'none';
+    document.getElementById('tabn-new').classList.toggle('active', tab === 'new');
+    document.getElementById('tabn-list').classList.toggle('active', tab === 'list');
+    if (tab === 'list') loadLabelList();
+}
+
+// --- ADMIN LOGIC ---
+async function showAdmin() {
+    showPage('admin-page');
+    hideSpinner();
+}
+
+const REQUIRED_FIELDS = ['crop','variety','lotNo','dot','dop','validUpto','netWeight','mrp'];
+const OPTIONAL_FIELDS = ['physicalPurity','geneticPurity','germination','moisture','producedBy','packedBy','marketedBy','shortUrl'];
+
+function readLabelForm() {
+    const out = { createdAt: new Date().toISOString() };
+    for (const k of REQUIRED_FIELDS) out[k] = document.getElementById('f-' + k).value;
+    for (const k of OPTIONAL_FIELDS) {
+        const el = document.getElementById('f-' + k);
+        if (el && el.value) out[k] = el.value;
+    }
+    return out;
+}
+
+async function saveLabel() {
+    const data = readLabelForm();
+
+    for (const k of REQUIRED_FIELDS) {
+        if (!data[k]) {
+            showToast(`Please fill ${k}`, 'danger');
+            return;
+        }
+    }
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+
+    await fsSet(COLLECTION, 'lot_' + data.lotNo, data);
+    showToast(`Lot ${data.lotNo} saved ✓`);
+    generateQR(data.lotNo);
+    btn.disabled = false; btn.textContent = 'Update Label';
+    EDIT_MODE = true;
+}
+
+function generateQR(lotNo, targetId = 'qr-box') {
+    const container = document.getElementById(targetId);
+    container.innerHTML = '';
+    const url = `https://verify.spiceveg.in/?id=${lotNo}`;
+    new QRCode(container, {
+        text: url,
+        width: 180,
+        height: 180,
+        colorDark: "#1A2410",
+        colorLight: "#FFFFFF",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+    if (targetId === 'qr-box') {
+        document.getElementById('qr-url').textContent = url;
+        document.getElementById('qr-section').style.display = 'block';
+        const shortenBtn = document.getElementById('btn-shorten');
+        if (shortenBtn) shortenBtn.style.display = 'inline-block';
+        container.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        document.getElementById('modal-url').textContent = url;
+    }
+}
+
+const SHORT_API = 'https://s.spiceveg.in/shorten';
+
+async function shortenUrl() {
+    const urlDisplay = document.getElementById('qr-url');
+    const longUrl = urlDisplay.textContent;
+    if (!longUrl || longUrl.includes('s.spiceveg.in')) return;
+
+    const btn = document.getElementById('btn-shorten');
+    const originalText = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Shortening...';
+
+    try {
+        const res = await fetch(SHORT_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: longUrl })
+        });
+        const data = await res.json();
+        if (data.short) {
+            urlDisplay.innerHTML = `<span style="color:var(--green-primary);font-weight:600;">${data.short}</span><br><small style="opacity:0.5;font-size:9px;">Long: ${longUrl}</small>`;
+            const lotNo = document.getElementById('f-lotNo').value;
+            if (lotNo) {
+                const fullData = readLabelForm();
+                fullData.shortUrl = data.short;
+                await fsSet(COLLECTION, 'lot_' + lotNo, fullData);
+            }
+            showToast('URL Shortened & Saved ✓');
+            btn.style.display = 'none';
+        } else {
+            showToast('Shortening failed', 'danger');
+        }
+    } catch (e) {
+        showToast('Shortening failed', 'danger');
+    } finally {
+        btn.disabled = false; btn.textContent = originalText;
+    }
+}
+
+function downloadQR() {
+    const canvas = document.querySelector('#qr-box canvas');
+    if (!canvas) return;
+    const lotNo = document.getElementById('f-lotNo').value;
+    const link = document.createElement('a');
+    link.download = `SpiceVeg_Lot_${lotNo}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+async function loadLabelList() {
+    const container = document.getElementById('labels-container');
+    container.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Loading records...</p>';
+    const list = await fsList(COLLECTION);
+    container.innerHTML = '';
+    if (!list.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);margin-top:40px;">No records found.</p>';
+        return;
+    }
+    list.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'label-card';
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <b style="color:var(--green-primary);">Lot: ${item.lotNo}</b> — ${item.crop} / ${item.variety}
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                        Valid: ${item.validUpto} | Net Wt: ${item.netWeight}
+                    </div>
+                </div>
+                <button onclick="openModal('${item.lotNo}')" style="padding:4px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);">QR</button>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+                <button onclick="editLabel('${item.lotNo}')" style="flex:1;font-size:12px;padding:6px;background:none;border:1px solid var(--border);">Edit</button>
+                <button onclick="window.open('?id=${item.lotNo}', '_blank')" style="flex:1;font-size:12px;padding:6px;background:none;border:1px solid var(--border);">Open ↗</button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+    CURRENT_LABELS = list;
+}
+
+function editLabel(id) {
+    const item = CURRENT_LABELS.find(l => l.lotNo === id);
+    if (!item) return;
+    for (let k in item) {
+        const el = document.getElementById('f-' + k);
+        if (el) el.value = item[k];
+    }
+    switchTab('new');
+    document.getElementById('save-btn').textContent = 'Update Label';
+    document.getElementById('qr-section').style.display = 'none';
+    EDIT_MODE = true;
+}
+
+// --- MODAL & LIGHTBOX ---
+function openModal(id) {
+    document.getElementById('modal-wrap').style.display = 'flex';
+    generateQR(id, 'modal-qr');
+}
+function closeModal() { document.getElementById('modal-wrap').style.display = 'none'; }
+function downloadModalQR() {
+    const canvas = document.querySelector('#modal-qr canvas');
+    if (!canvas) return;
+    const urlText = document.getElementById('modal-url').textContent;
+    const id = urlText.split('id=')[1];
+    const link = document.createElement('a');
+    link.download = `SpiceVeg_Label_${id}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+function openCultivation() {
+    const crop = document.getElementById('c-crop').textContent.toLowerCase().replace(/\s+/g, '_');
+    const img = document.getElementById('lb-img');
+    img.src = `technique_${crop}.png`;
+    img.onerror = () => { img.src = 'src/practices.jpg'; }; // fallback
+    
+    // Reset click handler if it was modified by lazy loader previously
+    img.onclick = null; 
+    img.style.filter = 'none';
+    
+    // Apply speed test logic to this image specifically
+    if (IS_LOW_SPEED) {
+        img.dataset.src = img.src;
+        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        img.style.cursor = 'pointer';
+        img.style.filter = 'grayscale(100%) blur(2px)';
+        img.onclick = function() {
+            this.src = this.dataset.src;
+            this.style.filter = 'none';
+            this.onclick = null;
+        };
+        showToast('Low speed detected. Tap image to load.', 'success');
+    }
+    
+    document.getElementById('lightbox').style.display = 'flex';
+    history.pushState({lb:1}, '');
+}
+function closeLightbox() { document.getElementById('lightbox').style.display = 'none'; }
+
+// --- CUSTOMER LOGIC ---
+async function loadCustomerView(id) {
+    showPage('customer-page');
+    const data = await fsGet(COLLECTION, 'lot_' + id);
+    hideSpinner();
+    
+    if (!data) {
+        document.getElementById('customer-page').innerHTML = `
+            <div style="text-align:center;padding:100px 20px;">
+                <div style="font-size:40px;">⚠️</div>
+                <h3>Information Not Found</h3>
+                <p style="color:var(--text-muted);">The QR code you scanned is invalid or the record has been removed.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Render core fields
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    setText('c-crop', data.crop);
+    setText('c-variety', data.variety);
+    setText('c-lotNo', data.lotNo);
+    setText('c-dot', data.dot);
+    setText('c-dop', data.dop);
+    setText('c-validUpto', data.validUpto);
+    setText('c-netWeight', data.netWeight);
+    setText('c-mrp', data.mrp);
+
+    // Quality parameters — show section only if at least one is present
+    const hasQuality = data.physicalPurity || data.geneticPurity || data.germination || data.moisture;
+    if (hasQuality) {
+        document.getElementById('c-quality-section').style.display = 'block';
+        setText('c-physicalPurity', data.physicalPurity);
+        setText('c-geneticPurity', data.geneticPurity);
+        setText('c-germination', data.germination);
+        setText('c-moisture', data.moisture);
+    }
+
+    // Producer info — show section only if at least one is present
+    const hasProducer = data.producedBy || data.packedBy || data.marketedBy;
+    if (hasProducer) {
+        document.getElementById('c-producer-section').style.display = 'block';
+        setText('c-producedBy', data.producedBy);
+        setText('c-packedBy', data.packedBy);
+        setText('c-marketedBy', data.marketedBy);
+    }
+
+    // Back button protection
+    history.pushState(null, '', window.location.href);
+    window.onpopstate = () => {
+        if (document.getElementById('lightbox').style.display === 'flex') {
+            closeLightbox();
+        } else {
+            history.pushState(null, '', window.location.href);
+        }
+    };
+}
+
+// --- UTILS ---
+function hideSpinner() { document.getElementById('loading-screen').style.display = 'none'; }
+
+function showToast(msg, type = 'success') {
+    const t = document.createElement('div');
+    t.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${type==='success'?'var(--green-primary)':'var(--danger)'};color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = '0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+function printLabelUI() {
+    const data = readLabelForm();
+    const canvas = document.querySelector('#qr-box canvas');
+    const qr = canvas ? canvas.toDataURL() : '';
+
+    const qualityRow = (data.physicalPurity || data.geneticPurity || data.germination || data.moisture)
+        ? `<div class="hr"></div>
+           <center style="font-size:8px;letter-spacing:0.05em;">QUALITY PARAMETERS</center>
+           ${data.physicalPurity ? `<div class="row"><span>Physical Purity:</span> <b>${data.physicalPurity}</b></div>` : ''}
+           ${data.geneticPurity ? `<div class="row"><span>Genetic Purity:</span> <b>${data.geneticPurity}</b></div>` : ''}
+           ${data.germination ? `<div class="row"><span>Germination:</span> <b>${data.germination}</b></div>` : ''}
+           ${data.moisture ? `<div class="row"><span>Moisture:</span> <b>${data.moisture}</b></div>` : ''}`
+        : '';
+
+    const producerRow = (data.producedBy || data.packedBy || data.marketedBy)
+        ? `<div class="hr"></div>
+           ${data.producedBy ? `<div style="font-size:8px;"><b>Produced by:</b> ${data.producedBy}</div>` : ''}
+           ${data.packedBy ? `<div style="font-size:8px;"><b>Packed by:</b> ${data.packedBy}</div>` : ''}
+           ${data.marketedBy ? `<div style="font-size:8px;"><b>Marketed by:</b> ${data.marketedBy}</div>` : ''}`
+        : '';
+
+    const w = window.open('', '_blank');
+    w.document.write(`
+        <html><head><style>
+            body { font-family: sans-serif; font-size: 10px; padding: 5mm; width: 60mm; border: 1px solid #eee; }
+            .brand { font-size: 14px; font-weight: bold; color: #3B6D11; display: flex; align-items: center; gap: 5px; }
+            .hr { height: 1px; background: #ddd; margin: 2mm 0; }
+            .row { display: flex; justify-content: space-between; margin: 0.5mm 0; }
+            .qr { width: 30mm; height: 30mm; display: block; margin: 2mm auto; }
+        </style></head><body>
+            <div class="brand">SpiceVeg™ <small style="color:#777;font-weight:normal;font-size:8px;">VEGETABLE SEEDS</small></div>
+            <div class="hr"></div>
+            <center><b>TRUTHFUL LABEL</b></center>
+            <div class="row"><span>Crop:</span> <b>${data.crop}</b></div>
+            <div class="row"><span>Variety:</span> <b>${data.variety}</b></div>
+            <div class="row"><span>Lot No:</span> <b>${data.lotNo}</b></div>
+            <div class="row"><span>Tested:</span> ${data.dot}</div>
+            <div class="row"><span>Packed:</span> ${data.dop}</div>
+            <div class="row"><span>Valid:</span> <b>${data.validUpto}</b></div>
+            <div class="row"><span>Net Wt:</span> ${data.netWeight}</div>
+            <div class="row"><span>MRP:</span> <b>₹${data.mrp}/-</b></div>
+            ${qualityRow}
+            <img src="${qr}" class="qr">
+            ${producerRow}
+            <center style="font-size:7px;color:#999;margin-top:1mm;">Scan to verify quality & cultivation techniques</center>
+        </body></html>
+    `);
+    w.document.close();
+    setTimeout(() => { w.print(); }, 500);
+}
+
+async function initStatus() {
+    const elVer = document.getElementById('status-version');
+    const elUpd = document.getElementById('status-updated');
+    const elSym = document.getElementById('status-symbol');
+    
+    if (elVer) elVer.textContent = VERSION;
+    if (elUpd) elUpd.textContent = LAST_UPDATED;
+    
+    // Simple check: Components (QRCode) + Firebase Ping
+    try {
+        const componentsOk = typeof QRCode !== 'undefined';
+        const fbRes = await fetch(`${FS_BASE}?key=${FB.apiKey}&pageSize=1`);
+        const fbOk = fbRes.ok;
+        
+        if (componentsOk && fbOk) {
+            elSym.classList.add('ok');
+            elSym.title = 'Systems Operational: Components Loaded & Firebase Live';
+        } else {
+            elSym.title = 'Systems Check Failed: ' + (!componentsOk ? 'Components Missing ' : '') + (!fbOk ? 'Firebase Offline' : '');
+        }
+    } catch (e) {
+        elSym.title = 'Connection Error';
+    }
+}
+
+// --- INIT ---
+window.addEventListener('DOMContentLoaded', detectMode);

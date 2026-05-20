@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SpiceVeg — Seed Verification</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:wght@600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <svg width="40" height="40" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="16" fill="none" stroke="#C0DD97" stroke-width="3"/>
+            <circle cx="20" cy="20" r="16" fill="none" stroke="#3B6D11" stroke-width="3"
+                    stroke-dasharray="50 50" stroke-linecap="round">
+                <animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20" dur="0.8s" repeatCount="indefinite"/>
+            </circle>
+        </svg>
+        <span style="color:var(--text-muted);font-size:13px;">Loading...</span>
+    </div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="page">
+        <div class="logo-block">
+            <img src="src/SPICE VEG LOGOS.jpeg" class="no-lazy" width="80" height="80" alt="SpiceVeg Logo" style="border-radius:50%; object-fit:cover; border:2px solid var(--green-pale);">
+            <span class="brand" style="font-size:24px;color:var(--green-primary);margin-top:12px;">SpiceVeg</span>
+            <span style="font-size:11px;letter-spacing:0.15em;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Vegetable Seeds</span>
+        </div>
+        <h2 style="text-align:center;">Admin Login</h2>
+        <div class="field">
+            <label>Username</label>
+            <input type="text" id="login-user" autocomplete="username" placeholder="Enter username">
+        </div>
+        <div class="field">
+            <label>Password</label>
+            <div style="position:relative;">
+                <input type="password" id="login-pass" autocomplete="current-password" placeholder="Enter password">
+                <button type="button" id="pw-toggle" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);padding:8px;" onclick="togglePassword()">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="login-err" style="display:none;color:var(--danger);font-size:13px;margin:8px 0;background:var(--danger-bg);padding:10px 12px;border-radius:8px;border:1px solid #F0AAAA;">
+            Invalid username or password.
+        </div>
+        <button id="login-btn" class="btn-primary" style="margin-top:10px;" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- Admin Page -->
+    <div id="admin-page" class="page">
+        <div class="admin-header">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <img src="src/SPICE VEG LOGOS.jpeg" class="no-lazy" width="32" height="32" alt="SpiceVeg Logo" style="border-radius:50%; object-fit:cover;">
+                <span class="brand" style="font-size:18px;color:var(--green-primary);">Admin</span>
+            </div>
+            <button onclick="doLogout()" style="font-size:13px;padding:6px 12px;background:none;border:none;color:var(--danger);">Logout</button>
+        </div>
+
+        <div class="tabs">
+            <button id="tabn-new" class="tab active" onclick="switchTab('new')">New Label</button>
+            <button id="tabn-list" class="tab" onclick="switchTab('list')">All Labels</button>
+        </div>
+
+        <!-- Tab: New Label -->
+        <div id="tab-new">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="field">
+                    <label>Crop</label>
+                    <input type="text" id="f-crop" placeholder="e.g. Chilli">
+                </div>
+                <div class="field">
+                    <label>Variety</label>
+                    <input type="text" id="f-variety" placeholder="e.g. SPICE-55">
+                </div>
+            </div>
+            <div class="field">
+                <label>Lot Number</label>
+                <input type="text" id="f-lotNo" placeholder="e.g. SV22162">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="field">
+                    <label>Date of Testing</label>
+                    <input type="date" id="f-dot">
+                </div>
+                <div class="field">
+                    <label>Date of Packaging</label>
+                    <input type="date" id="f-dop">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="field">
+                    <label>Valid Upto</label>
+                    <input type="date" id="f-validUpto">
+                </div>
+                <div class="field">
+                    <label>Net Weight</label>
+                    <input type="text" id="f-netWeight" placeholder="e.g. 10g">
+                </div>
+            </div>
+            <div class="field">
+                <label>MRP (₹)</label>
+                <input type="number" id="f-mrp" placeholder="e.g. 815">
+            </div>
+
+            <div style="margin-top:8px;padding-top:16px;border-top:1px dashed var(--border);">
+                <span style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Quality Parameters</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="field">
+                    <label>Physical Purity</label>
+                    <input type="text" id="f-physicalPurity" placeholder="e.g. 98%">
+                </div>
+                <div class="field">
+                    <label>Genetic Purity</label>
+                    <input type="text" id="f-geneticPurity" placeholder="e.g. 95%">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="field">
+                    <label>Germination</label>
+                    <input type="text" id="f-germination" placeholder="e.g. 60%">
+                </div>
+                <div class="field">
+                    <label>Moisture</label>
+                    <input type="text" id="f-moisture" placeholder="e.g. 6%">
+                </div>
+            </div>
+
+            <div style="margin-top:8px;padding-top:16px;border-top:1px dashed var(--border);">
+                <span style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Producer Details</span>
+            </div>
+            <div class="field">
+                <label>Produced By</label>
+                <input type="text" id="f-producedBy" placeholder="Spice Veg Agri, Hyderabad" value="Spice Veg Agri, Hyderabad">
+            </div>
+            <div class="field">
+                <label>Packed By</label>
+                <input type="text" id="f-packedBy" placeholder="Spice Veg Agri, Hyderabad" value="Spice Veg Agri, Hyderabad">
+            </div>
+            <div class="field">
+                <label>Marketed By</label>
+                <input type="text" id="f-marketedBy" placeholder="Spice Veg Agri Pvt. Ltd., Hyderabad" value="Spice Veg Agri Pvt. Ltd., Hyderabad">
+            </div>
+
+            <button id="save-btn" class="btn-primary" onclick="saveLabel()">Generate & Save Label</button>
+
+            <!-- QR Preview Section -->
+            <div id="qr-section" style="display:none;text-align:center;margin-top:32px;padding-top:24px;border-top:1px dashed var(--border);">
+                <span style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">QR Code Preview</span>
+                <div id="qr-box" class="qr-box"></div>
+                <p id="qr-url" style="font-size:11px;color:var(--text-muted);word-break:break-all;margin-bottom:16px;"></p>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <button id="btn-shorten" class="btn-primary" style="background:var(--green-primary);display:none;" onclick="shortenUrl()">Shorten URL</button>
+                    <div style="display:flex;gap:10px;">
+                        <button class="btn-primary" style="flex:1;background:var(--surface2);color:var(--text-primary);border:1px solid var(--border);" onclick="downloadQR()">Download PNG</button>
+                        <button class="btn-primary" style="flex:1;" onclick="printLabelUI()">Print Label</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: List -->
+        <div id="tab-list" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;font-size:16px;">Recent Labels</h3>
+                <button onclick="loadLabelList()" style="font-size:12px;padding:4px 8px;background:none;border:none;color:var(--green-primary);">🔄 Refresh</button>
+            </div>
+            <div id="labels-container"></div>
+        </div>
+    </div>
+
+    <!-- Customer Page -->
+    <div id="customer-page" class="page">
+        <div class="logo-block" style="padding-top:24px;">
+            <img src="src/SPICE VEG LOGOS.jpeg" class="no-lazy" width="64" height="64" alt="SpiceVeg Logo" style="border-radius:50%; object-fit:cover; border:2px solid var(--green-pale);">
+            <span class="brand" style="font-size:22px;color:var(--green-primary);margin-top:8px;">SpiceVeg™</span>
+            <span style="font-size:10px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;">Vegetable Seeds</span>
+            <div class="badge-verified">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>
+                QR Verified
+            </div>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:24px;">
+            <h4 style="margin:0 0 16px;color:var(--green-primary);letter-spacing:0.05em;text-align:center;">TRUTHFUL LABEL</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Crop</span><b id="c-crop"></b></div>
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Variety</span><b id="c-variety"></b></div>
+                <div style="grid-column: span 2;"><span style="color:var(--text-muted);font-size:12px;display:block;">Lot No.</span><b id="c-lotNo"></b></div>
+            </div>
+            <div class="hr"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Testing Date</span><span id="c-dot"></span></div>
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Pkg Date</span><span id="c-dop"></span></div>
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Valid Upto</span><b id="c-validUpto"></b></div>
+                <div><span style="color:var(--text-muted);font-size:12px;display:block;">Net Weight</span><span id="c-netWeight"></span></div>
+            </div>
+            <div class="hr"></div>
+            <div id="c-quality-section" style="display:none;">
+                <div style="text-align:center;margin-bottom:10px;">
+                    <span style="color:var(--text-muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Quality Parameters</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+                    <div><span style="color:var(--text-muted);font-size:12px;display:block;">Physical Purity</span><b id="c-physicalPurity"></b></div>
+                    <div><span style="color:var(--text-muted);font-size:12px;display:block;">Genetic Purity</span><b id="c-geneticPurity"></b></div>
+                    <div><span style="color:var(--text-muted);font-size:12px;display:block;">Germination</span><b id="c-germination"></b></div>
+                    <div><span style="color:var(--text-muted);font-size:12px;display:block;">Moisture</span><b id="c-moisture"></b></div>
+                </div>
+                <div class="hr"></div>
+            </div>
+            <div style="text-align:center;">
+                <span style="color:var(--text-muted);font-size:12px;display:block;">MRP (Incl. of all taxes)</span>
+                <span style="font-size:20px;font-weight:600;color:var(--text-primary);">₹<span id="c-mrp"></span>/-</span>
+            </div>
+        </div>
+
+        <div id="c-producer-section" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:24px;display:none;">
+            <div style="text-align:center;margin-bottom:10px;">
+                <span style="color:var(--text-muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Producer Information</span>
+            </div>
+            <div style="font-size:13px;line-height:1.6;">
+                <div style="margin-bottom:6px;"><span style="color:var(--text-muted);">Produced by:</span> <b id="c-producedBy"></b></div>
+                <div style="margin-bottom:6px;"><span style="color:var(--text-muted);">Packed by:</span> <b id="c-packedBy"></b></div>
+                <div><span style="color:var(--text-muted);">Marketed by:</span> <b id="c-marketedBy"></b></div>
+            </div>
+        </div>
+
+        <button class="btn-primary" style="margin:32px 0 40px;" onclick="openCultivation()">View Cultivation Practices</button>
+        
+        <div style="text-align:center;color:var(--text-muted);font-size:11px;padding-bottom:40px;">
+            © 2026 Spice Veg Agri. All rights reserved.
+        </div>
+    </div>
+</div>
+
+<!-- Status Footer -->
+<div class="status-footer">
+    <span id="status-symbol">●</span>
+    v<span id="status-version"></span> | <span id="status-updated"></span>
+</div>
+
+<!-- Modal: QR View -->
+<div id="modal-wrap">
+    <div id="modal-inner">
+        <div id="modal-qr"></div>
+        <p id="modal-url" style="font-size:11px;color:var(--text-muted);word-break:break-all;margin:12px 0;"></p>
+        <button class="btn-primary" style="background:var(--surface2);color:var(--text-primary);border:1px solid var(--border);" onclick="downloadModalQR()">Download PNG</button>
+        <button class="btn-primary" style="margin-top:8px;background:none;border:none;color:var(--text-muted);" onclick="closeModal()">Close</button>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()">
+    <div style="position:relative;width:100%;text-align:center;padding-top:40px;">
+        <button style="position:fixed;top:10px;right:10px;background:rgba(0,0,0,0.5);border:none;color:#fff;width:36px;height:36px;border-radius:18px;font-size:20px;">✕</button>
+        <img id="lb-img" src="" alt="Cultivation Practices" onclick="event.stopPropagation()">
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
