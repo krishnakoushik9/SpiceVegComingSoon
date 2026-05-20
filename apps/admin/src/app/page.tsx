@@ -65,13 +65,14 @@ export default function AdminPage() {
         return;
       }
 
-      const shortRes = await fetch('/api/v1/lots/create', {
+      const verifyUrl = `https://verify.spiceveg.in/?id=${data.lotNo}`;
+      const shortRes = await fetch('https://api.spiceveg.in/shorten', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ url: verifyUrl }),
       });
-      const result = await shortRes.json();
-      setPrintData({ data, shortUrl: result.shortUrl || `https://verify.spiceveg.in/?id=${data.lotNo}` });
+      const { short } = await shortRes.json();
+      setPrintData({ data, shortUrl: short || verifyUrl });
       fetchLabels();
     } catch (e) {
       alert('Error connecting to API');
