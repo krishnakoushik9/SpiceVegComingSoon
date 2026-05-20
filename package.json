@@ -6,6 +6,7 @@
     "build": "turbo build",
     "deploy:web": "cd apps/web && npx wrangler pages deploy out --project-name=spiceveg-web",
     "deploy:admin": "cd apps/admin && npx wrangler pages deploy out --project-name=spiceveg-admin",
+    "deploy:verify": "node scripts/stage-verify.mjs && npx wrangler pages deploy dist/verify --project-name=spiceveg-verify --branch=main --commit-dirty=true",
     "deploy:api": "cd apps/worker && npx wrangler deploy",
     "dev": "turbo dev",
     "lint": "turbo lint",
