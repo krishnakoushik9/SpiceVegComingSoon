@@ -1,12 +1,22 @@
 // --- CONFIG & CONSTANTS ---
-const VERSION = '1.0.7';
-const LAST_UPDATED = 'Apr 24, 2026 12:10 PM';
+// apps/verify/ is the single source of truth. Legacy mirror at
+// github.com/krishnakoushik9/Spice-Veg-Agri-Customer is archived.
+const VERSION = '2.0.0';
+const LAST_UPDATED = 'May 20, 2026';
 const FB = {
     apiKey: "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4",
     projectId: "spice-veg-agri"
 };
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB.projectId}/databases/(default)/documents`;
 const COLLECTION = 'seed_labels';
+
+// Canonical company fields — used as defaults if the admin clears the input.
+const COMPANY = {
+    producedBy: 'Spice Veg Agri, Hyderabad',
+    packedBy:   'Spice Veg Agri, Hyderabad',
+    marketedBy: 'Spice Veg Agri Pvt. Ltd., Hyderabad'
+};
+
 let CURRENT_LABELS = [];
 let EDIT_MODE = false;
 let IS_LOW_SPEED = false;
@@ -27,9 +37,10 @@ async function runSpeedTest() {
 }
 
 // --- UPDATE AGENT ---
+// Polls this repo's main branch so we don't drift from the source of truth.
 async function checkUpdates() {
     try {
-        const res = await fetch(`https://raw.githubusercontent.com/krishnakoushik9/Spice-Veg-Agri-Customer/main/app.js?t=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(`https://raw.githubusercontent.com/krishnakoushik9/SpiceVegComingSoon/main/apps/verify/app.js?t=${Date.now()}`, { cache: 'no-store' });
         const text = await res.text();
         const match = text.match(/const VERSION = '([\d.]+)'/);
         if (match && match[1] !== VERSION) {
@@ -69,6 +80,21 @@ async function fsSet(collection, docId, data) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
     });
+    return res.json();
+}
+
+// PATCH with updateMask — only the listed fields are written, the rest are preserved.
+async function fsPatch(collection, docId, fields) {
+    const mask = Object.keys(fields).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+    const fsFields = {};
+    for (const [k, v] of Object.entries(fields)) fsFields[k] = { stringValue: String(v) };
+    const url = `${FS_BASE}/${collection}/${docId}?${mask}&key=${FB.apiKey}`;
+    const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: fsFields })
+    });
+    if (!res.ok) throw new Error(`Firestore patch failed (${res.status})`);
     return res.json();
 }
 
@@ -181,15 +207,29 @@ async function showAdmin() {
 }
 
 const REQUIRED_FIELDS = ['crop','variety','lotNo','dot','dop','validUpto','netWeight','mrp'];
-const OPTIONAL_FIELDS = ['physicalPurity','geneticPurity','germination','moisture','producedBy','packedBy','marketedBy','shortUrl'];
+const QUALITY_FIELDS = ['physicalPurity','geneticPurity','germination','moisture'];
+const PRODUCER_FIELDS = ['producedBy','packedBy','marketedBy'];
+const FIELD_LABELS = {
+    crop:'Crop', variety:'Variety', lotNo:'Lot Number', dot:'Date of Testing',
+    dop:'Date of Packaging', validUpto:'Valid Upto', netWeight:'Net Weight', mrp:'MRP',
+    physicalPurity:'Physical Purity', geneticPurity:'Genetic Purity',
+    germination:'Germination', moisture:'Moisture'
+};
 
 function readLabelForm() {
     const out = { createdAt: new Date().toISOString() };
     for (const k of REQUIRED_FIELDS) out[k] = document.getElementById('f-' + k).value;
-    for (const k of OPTIONAL_FIELDS) {
+    for (const k of QUALITY_FIELDS) {
         const el = document.getElementById('f-' + k);
         if (el && el.value) out[k] = el.value;
     }
+    // Producer fields fall back to canonical COMPANY values if the input was cleared.
+    for (const k of PRODUCER_FIELDS) {
+        const el = document.getElementById('f-' + k);
+        out[k] = (el && el.value) ? el.value : COMPANY[k];
+    }
+    const slugEl = document.getElementById('f-shortUrl');
+    if (slugEl && slugEl.value) out.shortUrl = slugEl.value;
     return out;
 }
 
@@ -198,7 +238,7 @@ async function saveLabel() {
 
     for (const k of REQUIRED_FIELDS) {
         if (!data[k]) {
-            showToast(`Please fill ${k}`, 'danger');
+            showToast(`Please fill "${FIELD_LABELS[k] || k}"`, 'danger');
             return;
         }
     }
@@ -240,8 +280,9 @@ const SHORT_API = 'https://s.spiceveg.in/shorten';
 
 async function shortenUrl() {
     const urlDisplay = document.getElementById('qr-url');
-    const longUrl = urlDisplay.textContent;
-    if (!longUrl || longUrl.includes('s.spiceveg.in')) return;
+    const longUrl = (urlDisplay.dataset.longUrl || urlDisplay.textContent).trim();
+    if (!longUrl || longUrl.includes('s.spiceveg.in/')) return;
+    urlDisplay.dataset.longUrl = longUrl;
 
     const btn = document.getElementById('btn-shorten');
     const originalText = btn.textContent;
@@ -254,19 +295,24 @@ async function shortenUrl() {
             body: JSON.stringify({ url: longUrl })
         });
         const data = await res.json();
-        if (data.short) {
-            urlDisplay.innerHTML = `<span style="color:var(--green-primary);font-weight:600;">${data.short}</span><br><small style="opacity:0.5;font-size:9px;">Long: ${longUrl}</small>`;
-            const lotNo = document.getElementById('f-lotNo').value;
-            if (lotNo) {
-                const fullData = readLabelForm();
-                fullData.shortUrl = data.short;
-                await fsSet(COLLECTION, 'lot_' + lotNo, fullData);
-            }
-            showToast('URL Shortened & Saved ✓');
-            btn.style.display = 'none';
-        } else {
+        if (!res.ok || !data.short) {
             showToast('Shortening failed', 'danger');
+            return;
         }
+        const shortUrl = data.short;
+        urlDisplay.innerHTML = `<a href="${shortUrl}" target="_blank" style="color:var(--green-primary);font-weight:600;text-decoration:none;">${shortUrl}</a><br><small style="opacity:0.55;font-size:9px;">Long: ${longUrl}</small>`;
+
+        const lotNo = new URLSearchParams(longUrl.split('?')[1] || '').get('id')
+                   || document.getElementById('f-lotNo').value;
+        let saved = false;
+        if (lotNo) {
+            try {
+                await fsPatch(COLLECTION, 'lot_' + lotNo, { shortUrl });
+                saved = true;
+            } catch (e) { console.warn('Firestore save failed:', e); }
+        }
+        showToast(saved ? 'Shortened & saved to database ✓' : 'Shortened ✓');
+        btn.style.display = 'none';
     } catch (e) {
         showToast('Shortening failed', 'danger');
     } finally {
@@ -296,13 +342,18 @@ async function loadLabelList() {
     list.forEach(item => {
         const card = document.createElement('div');
         card.className = 'label-card';
+        const purityBit = item.physicalPurity ? ` | Purity: ${item.physicalPurity}` : '';
+        const shortBadge = item.shortUrl
+            ? `<a href="${item.shortUrl}" target="_blank" style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;background:var(--green-pale);color:var(--green-primary);font-size:11px;font-weight:600;text-decoration:none;">🔗 Short Link</a>`
+            : '';
         card.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <div>
                     <b style="color:var(--green-primary);">Lot: ${item.lotNo}</b> — ${item.crop} / ${item.variety}
                     <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                        Valid: ${item.validUpto} | Net Wt: ${item.netWeight}
+                        Valid: ${item.validUpto} | Net Wt: ${item.netWeight}${purityBit}
                     </div>
+                    ${shortBadge}
                 </div>
                 <button onclick="openModal('${item.lotNo}')" style="padding:4px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);">QR</button>
             </div>
@@ -333,6 +384,18 @@ function editLabel(id) {
 function openModal(id) {
     document.getElementById('modal-wrap').style.display = 'flex';
     generateQR(id, 'modal-qr');
+    const item = CURRENT_LABELS.find(l => l.lotNo === id);
+    const modalUrl = document.getElementById('modal-url');
+    const longUrl = `https://verify.spiceveg.in/?id=${id}`;
+    if (item && item.shortUrl) {
+        modalUrl.innerHTML = `
+            <span style="display:inline-block;text-align:left;">
+                <b style="color:var(--green-primary);">Short:</b> <a href="${item.shortUrl}" target="_blank" style="color:var(--green-primary);">${item.shortUrl}</a><br>
+                <b>Long:</b> <span style="opacity:0.7;">${longUrl}</span>
+            </span>`;
+    } else {
+        modalUrl.textContent = longUrl;
+    }
 }
 function closeModal() { document.getElementById('modal-wrap').style.display = 'none'; }
 function downloadModalQR() {
@@ -392,7 +455,7 @@ async function loadCustomerView(id) {
         return;
     }
 
-    // Render core fields
+    // All fields render with '—' fallback so missing data never shows as blank/undefined.
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
     setText('c-crop', data.crop);
     setText('c-variety', data.variety);
@@ -401,9 +464,9 @@ async function loadCustomerView(id) {
     setText('c-dop', data.dop);
     setText('c-validUpto', data.validUpto);
     setText('c-netWeight', data.netWeight);
-    setText('c-mrp', data.mrp);
+    setText('c-mrp', data.mrp ? `₹${data.mrp}/-` : '—');
 
-    // Quality parameters — show section only if at least one is present
+    // Quality block: visible only when the lot has at least one quality metric.
     const hasQuality = data.physicalPurity || data.geneticPurity || data.germination || data.moisture;
     if (hasQuality) {
         document.getElementById('c-quality-section').style.display = 'block';
@@ -413,14 +476,12 @@ async function loadCustomerView(id) {
         setText('c-moisture', data.moisture);
     }
 
-    // Producer info — show section only if at least one is present
-    const hasProducer = data.producedBy || data.packedBy || data.marketedBy;
-    if (hasProducer) {
-        document.getElementById('c-producer-section').style.display = 'block';
-        setText('c-producedBy', data.producedBy);
-        setText('c-packedBy', data.packedBy);
-        setText('c-marketedBy', data.marketedBy);
-    }
+    // Producer block: always fall back to the canonical COMPANY values
+    // so customers always see who produced/packed/marketed the seed.
+    document.getElementById('c-producer-section').style.display = 'block';
+    setText('c-producedBy', data.producedBy || COMPANY.producedBy);
+    setText('c-packedBy',   data.packedBy   || COMPANY.packedBy);
+    setText('c-marketedBy', data.marketedBy || COMPANY.marketedBy);
 
     // Back button protection
     history.pushState(null, '', window.location.href);
