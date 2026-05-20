@@ -39,6 +39,8 @@ export const LabelList: React.FC<LabelListProps> = ({ labels, onEdit, onViewQR }
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map((item, idx) => {
           const purity = (item as any).physicalPurity;
+          const created = (item as any).createdAt;
+          const createdShort = created ? new Date(created).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
           return (
             <div key={item._id || idx} className="lot-card">
               <div className="flex items-start justify-between gap-2">
@@ -52,6 +54,9 @@ export const LabelList: React.FC<LabelListProps> = ({ labels, onEdit, onViewQR }
                     Valid {item.validUpto || '—'} · {item.netWeight || '—'}
                     {purity ? <> · Purity {purity}</> : null}
                   </p>
+                  {createdShort && (
+                    <p className="text-[11px] text-stone-300 mt-0.5">Created {createdShort}</p>
+                  )}
                   {item.shortUrl && (
                     <a href={item.shortUrl} target="_blank" rel="noreferrer" className="short-badge">
                       <Link2 size={11} /> Short link

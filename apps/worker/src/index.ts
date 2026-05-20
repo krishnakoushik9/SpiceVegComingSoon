@@ -24,6 +24,13 @@ app.use('*', cors({
 }))
 
 // --- URL SHORTENER REDIRECT ENGINE ---
+app.post('/shorten', async (c) => {
+  const { url } = await c.req.json();
+  const slug = Math.random().toString(36).substring(2, 8);
+  await c.env.SHORT_LINKS.put(slug, JSON.stringify({ url, createdAt: new Date().toISOString() }));
+  return c.json({ short: `${c.env.SHORT_DOMAIN}/${slug}` });
+});
+
 app.get('/:slug', async (c) => {
   const slug = c.req.param('slug')
   if (slug === 'api' || slug.startsWith('api/')) return c.notFound()

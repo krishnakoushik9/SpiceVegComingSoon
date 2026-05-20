@@ -1,156 +1,136 @@
-"use client";
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { BadgeCheck, Info, MapPin, Calendar, Scale, IndianRupee, Loader2 } from 'lucide-react';
-import { SeedLabel } from '@spiceveg/types';
-import { Suspense } from 'react';
+"use client"
+import { useEffect, useState } from "react"
 
-function VerifyContent() {
-  const searchParams = useSearchParams();
-  const lotId = searchParams.get('id');
-  const [data, setData] = useState<SeedLabel | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const FB_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4"
+const FS_BASE = "https://firestore.googleapis.com/v1/projects/spice-veg-agri/databases/(default)/documents"
 
-  useEffect(() => {
-    if (lotId) {
-      fetchLotData(lotId);
-    } else {
-      setLoading(false);
-      setError('No Lot Number provided.');
-    }
-  }, [lotId]);
-
-  const fetchLotData = async (id: string) => {
-    try {
-      const res = await fetch(`/api/v1/lots/${id}`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      } else {
-        setError('Lot information not found.');
-      }
-    } catch (e) {
-      setError('Connection error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center">
-        <Loader2 className="animate-spin text-leaf mb-4" size={40} />
-        <p className="text-stone-500 animate-pulse">Verifying Quality Records...</p>
-      </div>
-    );
+async function fsGet(id: string) {
+  const res = await fetch(`${FS_BASE}/seed_labels/lot_${id}?key=${FB_API_KEY}`)
+  if (!res.ok) return null
+  const doc = await res.json()
+  if (!doc.fields) return null
+  const out: any = {}
+  for (const [k, v] of Object.entries(doc.fields as any)) {
+    out[k] = (v as any).stringValue ?? (v as any).integerValue ?? ''
   }
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-          <Info size={40} />
-        </div>
-        <h1 className="text-xl font-bold text-stone-900 mb-2">Verification Failed</h1>
-        <p className="text-stone-500 mb-8">{error}</p>
-        <a href="https://spiceveg.in" className="btn-primary py-2 px-8">Go to Home</a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
-      {/* Brand Header */}
-      <div className="bg-white border-b border-stone-200 px-6 py-8 text-center">
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="text-2xl font-display font-bold text-leaf">SpiceVeg™</h1>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-leaf rounded-full text-xs font-bold border border-green-100">
-            <BadgeCheck size={14} />
-            AUTHENTIC QUALITY VERIFIED
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-md mx-auto p-6 space-y-6 pb-20">
-        <section className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-          <h2 className="text-xs uppercase tracking-widest text-stone-400 font-bold mb-6 text-center">Truthful Label Details</h2>
-          
-          <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Crop</p>
-              <p className="font-bold text-stone-900 leading-tight">{data.crop}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Variety</p>
-              <p className="font-bold text-stone-900 leading-tight">{data.variety}</p>
-            </div>
-            <div className="col-span-2 py-3 border-y border-stone-50">
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Lot Number</p>
-              <p className="font-display font-bold text-xl text-leaf">{data.lotNo}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Testing Date</p>
-              <div className="flex items-center gap-1.5">
-                <Calendar size={14} className="text-stone-300" />
-                <p className="font-medium text-stone-700">{data.dot}</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Packaging Date</p>
-              <div className="flex items-center gap-1.5">
-                <Calendar size={14} className="text-stone-300" />
-                <p className="font-medium text-stone-700">{data.dop}</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Valid Upto</p>
-              <p className="font-bold text-red-600">{data.validUpto}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">Net Weight</p>
-              <div className="flex items-center gap-1.5">
-                <Scale size={14} className="text-stone-300" />
-                <p className="font-medium text-stone-700">{data.netWeight}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-stone-50 text-center">
-            <p className="text-[10px] uppercase text-stone-400 font-bold mb-1">MRP (Incl. of all taxes)</p>
-            <div className="flex items-center justify-center gap-1 text-2xl font-bold text-stone-900">
-              <IndianRupee size={20} className="text-stone-300" />
-              <span>{data.mrp}/-</span>
-            </div>
-          </div>
-        </section>
-
-        <button 
-          onClick={() => window.location.href = 'https://spiceveg.in/cultivation'}
-          className="w-full btn-primary flex items-center justify-center gap-2 py-4"
-        >
-          View Cultivation Practices
-        </button>
-
-        <footer className="text-center">
-          <p className="text-[10px] text-stone-400 uppercase tracking-widest">
-            © 2026 Spice Veg Agri • Produced in India
-          </p>
-        </footer>
-      </main>
-    </div>
-  );
+  return out
 }
 
 export default function VerifyPage() {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("id")
+    if (!id) { setNotFound(true); setLoading(false); return }
+    fsGet(id).then(d => {
+      if (!d) setNotFound(true)
+      else setData(d)
+    }).finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div style={{position:'fixed',inset:0,background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{width:40,height:40,border:'3px solid #EAF3DE',borderTop:'3px solid #3B6D11',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <span style={{color:'#7A8F6A',fontSize:14}}>Verifying label...</span>
+    </div>
+  )
+
+  if (notFound) return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",textAlign:'center',padding:'100px 20px',color:'#1A2410'}}>
+      <div style={{fontSize:40}}>⚠️</div>
+      <h3>Information Not Found</h3>
+      <p style={{color:'#7A8F6A'}}>The QR code you scanned is invalid or the record has been removed.</p>
+    </div>
+  )
+
+  const rows: [string, string][] = [
+    ['Crop', data.crop],
+    ['Variety', data.variety],
+    ['Lot No', data.lotNo],
+    ['Date of Testing', data.dot],
+    ['Date of Packing', data.dop],
+    ['Valid Upto', data.validUpto],
+    ['Net Weight', data.netWeight + ' g'],
+    ['MRP', '₹' + data.mrp + '/-'],
+  ]
+
+  const qualityRows: [string, string][] = [
+    ['Physical Purity', data.physicalPurity],
+    ['Genetic Purity', data.geneticPurity],
+    ['Germination', data.germination],
+    ['Moisture', data.moisture],
+  ].filter(([, v]) => v) as [string, string][]
+
+  const cropKey = (data.crop || '').toLowerCase().replace(/\s+/g, '_')
+
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center">
-        <Loader2 className="animate-spin text-leaf mb-4" size={40} />
-        <p className="text-stone-500 animate-pulse">Verifying Quality Records...</p>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:'#FFFFFF',display:'flex',justifyContent:'center',minHeight:'100vh'}}>
+      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+      <div style={{width:'100%',maxWidth:480,padding:'0 16px',boxSizing:'border-box' as any}}>
+
+        {/* Header */}
+        <div style={{textAlign:'center',padding:'40px 0 20px',display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <div style={{fontSize:48,marginBottom:8}}>🌿</div>
+          <div style={{fontFamily:'serif',fontWeight:600,fontSize:22,color:'#1A2410'}}>SpiceVeg</div>
+          <div style={{fontSize:12,color:'#7A8F6A',letterSpacing:2,textTransform:'uppercase' as any,marginTop:2}}>Agri Seeds</div>
+          <div style={{display:'inline-flex',alignItems:'center',background:'#EAF3DE',color:'#3B6D11',padding:'4px 10px',borderRadius:20,fontSize:12,fontWeight:600,margin:'10px 0'}}>
+            ✓ Verified Truthful Label
+          </div>
+        </div>
+
+        {/* Data Card */}
+        <div style={{background:'#F7F9F4',border:'1px solid #D4DCC8',borderRadius:12,padding:16,animation:'fadeIn 0.3s ease'}}>
+          {rows.map(([label, value]) => (
+            <div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #D4DCC8'}}>
+              <span style={{fontSize:13,color:'#4A5C3A',fontWeight:500}}>{label}</span>
+              <span style={{fontSize:14,color:'#1A2410',fontWeight:600}}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Quality Parameters */}
+        {qualityRows.length > 0 && (
+          <div style={{background:'#F7F9F4',border:'1px solid #D4DCC8',borderRadius:12,padding:16,marginTop:16,animation:'fadeIn 0.3s ease'}}>
+            <div style={{fontSize:11,color:'#3B6D11',fontWeight:700,letterSpacing:1.5,textTransform:'uppercase' as any,marginBottom:6}}>
+              Quality Parameters
+            </div>
+            {qualityRows.map(([label, value], i) => (
+              <div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom: i === qualityRows.length - 1 ? 'none' : '1px solid #D4DCC8'}}>
+                <span style={{fontSize:13,color:'#4A5C3A',fontWeight:500}}>{label}</span>
+                <span style={{fontSize:14,color:'#1A2410',fontWeight:600}}>{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Cultivation Button */}
+        <button
+          onClick={() => setLightbox(true)}
+          style={{width:'100%',marginTop:20,background:'#3B6D11',color:'#fff',border:'none',borderRadius:8,padding:'11px 20px',fontSize:15,fontWeight:500,cursor:'pointer'}}
+        >
+          🌱 View Cultivation Techniques
+        </button>
+
+        <p style={{textAlign:'center',fontSize:11,color:'#7A8F6A',marginTop:32}}>
+          © 2026 SPICE VEG AGRI • Scan to verify quality
+        </p>
       </div>
-    }>
-      <VerifyContent />
-    </Suspense>
-  );
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.9)',zIndex:2000,display:'flex',alignItems:'flex-start',justifyContent:'center',overflowY:'auto',padding:'40px 0'}}>
+          <img
+            src={`/technique_${cropKey}.png`}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/src/practices.jpg' }}
+            style={{width:'90%',maxWidth:480,borderRadius:12}}
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </div>
+  )
 }

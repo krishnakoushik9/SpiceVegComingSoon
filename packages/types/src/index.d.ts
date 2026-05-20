@@ -9,9 +9,15 @@ export declare const SeedLabelSchema: z.ZodObject<{
     netWeight: z.ZodString;
     mrp: z.ZodString;
     createdAt: z.ZodOptional<z.ZodString>;
+    physicalPurity: z.ZodOptional<z.ZodString>;
+    geneticPurity: z.ZodOptional<z.ZodString>;
     germination: z.ZodOptional<z.ZodString>;
-    purity: z.ZodOptional<z.ZodString>;
     moisture: z.ZodOptional<z.ZodString>;
+    producedBy: z.ZodOptional<z.ZodString>;
+    packedBy: z.ZodOptional<z.ZodString>;
+    marketedBy: z.ZodOptional<z.ZodString>;
+    shortUrl: z.ZodOptional<z.ZodString>;
+    purity: z.ZodOptional<z.ZodString>;
     shortSlug: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     crop: string;
@@ -23,9 +29,15 @@ export declare const SeedLabelSchema: z.ZodObject<{
     netWeight: string;
     mrp: string;
     createdAt?: string | undefined;
+    physicalPurity?: string | undefined;
+    geneticPurity?: string | undefined;
     germination?: string | undefined;
-    purity?: string | undefined;
     moisture?: string | undefined;
+    producedBy?: string | undefined;
+    packedBy?: string | undefined;
+    marketedBy?: string | undefined;
+    shortUrl?: string | undefined;
+    purity?: string | undefined;
     shortSlug?: string | undefined;
 }, {
     crop: string;
@@ -37,9 +49,15 @@ export declare const SeedLabelSchema: z.ZodObject<{
     netWeight: string;
     mrp: string;
     createdAt?: string | undefined;
+    physicalPurity?: string | undefined;
+    geneticPurity?: string | undefined;
     germination?: string | undefined;
-    purity?: string | undefined;
     moisture?: string | undefined;
+    producedBy?: string | undefined;
+    packedBy?: string | undefined;
+    marketedBy?: string | undefined;
+    shortUrl?: string | undefined;
+    purity?: string | undefined;
     shortSlug?: string | undefined;
 }>;
 export type SeedLabel = z.infer<typeof SeedLabelSchema>;
