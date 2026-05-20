@@ -189,20 +189,25 @@ async function detectMode() {
 function showPage(id) {
     document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
     document.getElementById(id).style.display = 'block';
+    // Body class drives the wide-container override only for the admin surface.
+    document.body.classList.toggle('admin-active', id === 'admin-page');
     window.scrollTo(0,0);
 }
 
 function switchTab(tab) {
-    document.getElementById('tab-new').style.display = tab === 'new' ? 'block' : 'none';
-    document.getElementById('tab-list').style.display = tab === 'list' ? 'block' : 'none';
-    document.getElementById('tabn-new').classList.toggle('active', tab === 'new');
-    document.getElementById('tabn-list').classList.toggle('active', tab === 'list');
-    if (tab === 'list') loadLabelList();
+    const isNew = tab === 'new';
+    document.getElementById('tab-new').style.display = isNew ? 'grid' : 'none';
+    document.getElementById('tab-list').style.display = isNew ? 'none' : 'block';
+    document.getElementById('tabn-new').classList.toggle('active', isNew);
+    document.getElementById('tabn-list').classList.toggle('active', !isNew);
+    if (!isNew) loadLabelList();
 }
 
 // --- ADMIN LOGIC ---
 async function showAdmin() {
     showPage('admin-page');
+    // Ensure tab-new uses grid layout for the side panel on desktop.
+    document.getElementById('tab-new').style.display = 'grid';
     hideSpinner();
 }
 
@@ -244,12 +249,15 @@ async function saveLabel() {
     }
 
     const btn = document.getElementById('save-btn');
-    btn.disabled = true; btn.textContent = 'Saving...';
+    const btnText = document.getElementById('save-btn-text');
+    btn.disabled = true;
+    if (btnText) btnText.textContent = 'Saving…';
 
     await fsSet(COLLECTION, 'lot_' + data.lotNo, data);
     showToast(`Lot ${data.lotNo} saved ✓`);
     generateQR(data.lotNo);
-    btn.disabled = false; btn.textContent = 'Update Label';
+    btn.disabled = false;
+    if (btnText) btnText.textContent = 'Update Label';
     EDIT_MODE = true;
 }
 
@@ -266,11 +274,16 @@ function generateQR(lotNo, targetId = 'qr-box') {
         correctLevel: QRCode.CorrectLevel.H
     });
     if (targetId === 'qr-box') {
-        document.getElementById('qr-url').textContent = url;
+        const urlEl = document.getElementById('qr-url');
+        urlEl.textContent = url;
+        urlEl.dataset.longUrl = url;
+        const emptyEl = document.getElementById('qr-empty');
+        if (emptyEl) emptyEl.style.display = 'none';
         document.getElementById('qr-section').style.display = 'block';
         const shortenBtn = document.getElementById('btn-shorten');
-        if (shortenBtn) shortenBtn.style.display = 'inline-block';
-        container.scrollIntoView({ behavior: 'smooth' });
+        if (shortenBtn) shortenBtn.style.display = 'inline-flex';
+        // Smooth-scroll on mobile only; on desktop the side panel is sticky.
+        if (window.innerWidth < 900) container.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
         document.getElementById('modal-url').textContent = url;
     }
@@ -285,8 +298,11 @@ async function shortenUrl() {
     urlDisplay.dataset.longUrl = longUrl;
 
     const btn = document.getElementById('btn-shorten');
-    const originalText = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Shortening...';
+    // The button's last child is the trailing text node " Shorten URL" after the SVG.
+    const textNode = Array.from(btn.childNodes).find(n => n.nodeType === Node.TEXT_NODE && n.nodeValue.trim());
+    const originalText = textNode ? textNode.nodeValue : btn.textContent;
+    btn.disabled = true;
+    if (textNode) textNode.nodeValue = ' Shortening…'; else btn.textContent = 'Shortening…';
 
     try {
         const res = await fetch(SHORT_API, {
@@ -300,7 +316,7 @@ async function shortenUrl() {
             return;
         }
         const shortUrl = data.short;
-        urlDisplay.innerHTML = `<a href="${shortUrl}" target="_blank" style="color:var(--green-primary);font-weight:600;text-decoration:none;">${shortUrl}</a><br><small style="opacity:0.55;font-size:9px;">Long: ${longUrl}</small>`;
+        urlDisplay.innerHTML = `<a href="${shortUrl}" target="_blank">${shortUrl}</a><br><small style="opacity:0.55;font-size:10px;">Long: ${longUrl}</small>`;
 
         const lotNo = new URLSearchParams(longUrl.split('?')[1] || '').get('id')
                    || document.getElementById('f-lotNo').value;
@@ -316,7 +332,8 @@ async function shortenUrl() {
     } catch (e) {
         showToast('Shortening failed', 'danger');
     } finally {
-        btn.disabled = false; btn.textContent = originalText;
+        btn.disabled = false;
+        if (textNode) textNode.nodeValue = originalText; else btn.textContent = originalText;
     }
 }
 
@@ -330,41 +347,67 @@ function downloadQR() {
     link.click();
 }
 
-async function loadLabelList() {
+function renderLabelList(list) {
     const container = document.getElementById('labels-container');
-    container.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Loading records...</p>';
-    const list = await fsList(COLLECTION);
     container.innerHTML = '';
     if (!list.length) {
-        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);margin-top:40px;">No records found.</p>';
+        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;padding:40px 16px;">No matching records.</p>';
         return;
     }
     list.forEach(item => {
         const card = document.createElement('div');
         card.className = 'label-card';
-        const purityBit = item.physicalPurity ? ` | Purity: ${item.physicalPurity}` : '';
+        const purityBit = item.physicalPurity ? `<span class="divider">•</span>Purity ${item.physicalPurity}` : '';
         const shortBadge = item.shortUrl
-            ? `<a href="${item.shortUrl}" target="_blank" style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;background:var(--green-pale);color:var(--green-primary);font-size:11px;font-weight:600;text-decoration:none;">🔗 Short Link</a>`
+            ? `<a href="${item.shortUrl}" target="_blank" class="short-badge">
+                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                   Short link
+               </a>`
             : '';
         card.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                    <b style="color:var(--green-primary);">Lot: ${item.lotNo}</b> — ${item.crop} / ${item.variety}
-                    <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                        Valid: ${item.validUpto} | Net Wt: ${item.netWeight}${purityBit}
-                    </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div style="min-width:0;flex:1;">
+                    <div><span class="lot-id">${item.lotNo}</span><span class="crop-tag">${item.crop || '—'}</span></div>
+                    <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">${item.variety || ''}</div>
+                    <div class="meta-row">Valid ${item.validUpto || '—'}<span class="divider">•</span>${item.netWeight || '—'}${purityBit}</div>
                     ${shortBadge}
                 </div>
-                <button onclick="openModal('${item.lotNo}')" style="padding:4px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);">QR</button>
+                <button class="icon-btn" onclick="openModal('${item.lotNo}')" title="QR Code">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M20 14v3M14 20h6M17 17v4"/></svg>
+                </button>
             </div>
-            <div style="margin-top:12px;display:flex;gap:8px;">
-                <button onclick="editLabel('${item.lotNo}')" style="flex:1;font-size:12px;padding:6px;background:none;border:1px solid var(--border);">Edit</button>
-                <button onclick="window.open('?id=${item.lotNo}', '_blank')" style="flex:1;font-size:12px;padding:6px;background:none;border:1px solid var(--border);">Open ↗</button>
+            <div class="card-actions">
+                <button onclick="editLabel('${item.lotNo}')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    Edit
+                </button>
+                <button onclick="window.open('?id=${item.lotNo}', '_blank')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Open
+                </button>
             </div>
         `;
         container.appendChild(card);
     });
+}
+
+async function loadLabelList() {
+    const container = document.getElementById('labels-container');
+    container.innerHTML = '<p style="text-align:center;color:var(--text-muted);grid-column:1/-1;padding:40px 16px;">Loading records…</p>';
+    const list = await fsList(COLLECTION);
     CURRENT_LABELS = list;
+    renderLabelList(list);
+}
+
+function filterLabels() {
+    const q = (document.getElementById('label-search')?.value || '').toLowerCase().trim();
+    if (!q) { renderLabelList(CURRENT_LABELS); return; }
+    const filtered = CURRENT_LABELS.filter(l =>
+        (l.lotNo || '').toLowerCase().includes(q) ||
+        (l.crop || '').toLowerCase().includes(q) ||
+        (l.variety || '').toLowerCase().includes(q)
+    );
+    renderLabelList(filtered);
 }
 
 function editLabel(id) {
@@ -375,8 +418,11 @@ function editLabel(id) {
         if (el) el.value = item[k];
     }
     switchTab('new');
-    document.getElementById('save-btn').textContent = 'Update Label';
+    const btnText = document.getElementById('save-btn-text');
+    if (btnText) btnText.textContent = 'Update Label';
     document.getElementById('qr-section').style.display = 'none';
+    const emptyEl = document.getElementById('qr-empty');
+    if (emptyEl) emptyEl.style.display = '';
     EDIT_MODE = true;
 }
 

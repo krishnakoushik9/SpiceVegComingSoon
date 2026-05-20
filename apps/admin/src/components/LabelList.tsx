@@ -1,9 +1,11 @@
 import React from 'react';
 import { SeedLabel } from '@spiceveg/types';
-import { Edit2, ExternalLink, QrCode, Search } from 'lucide-react';
+import { Edit2, ExternalLink, QrCode, Search, Link2 } from 'lucide-react';
+
+type LotWithShort = SeedLabel & { _id?: string; shortUrl?: string };
 
 interface LabelListProps {
-  labels: (SeedLabel & { _id?: string })[];
+  labels: LotWithShort[];
   onEdit: (label: SeedLabel) => void;
   onViewQR: (label: SeedLabel) => void;
 }
@@ -11,64 +13,78 @@ interface LabelListProps {
 export const LabelList: React.FC<LabelListProps> = ({ labels, onEdit, onViewQR }) => {
   const [search, setSearch] = React.useState('');
 
-  const filteredLabels = labels.filter(l => 
-    l.lotNo.toLowerCase().includes(search.toLowerCase()) ||
-    l.crop.toLowerCase().includes(search.toLowerCase()) ||
-    l.variety.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = labels.filter(l => {
+    const q = search.toLowerCase();
+    return l.lotNo.toLowerCase().includes(q)
+        || l.crop.toLowerCase().includes(q)
+        || l.variety.toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-        <input 
-          type="text" 
-          placeholder="Search Lot No, Crop or Variety..." 
-          className="input-field pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex items-center gap-3">
+        <h3 className="text-base font-semibold text-forest flex-1">Recent Labels</h3>
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" size={16} />
+          <input
+            type="text"
+            placeholder="Search lot, crop, variety…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input-field pl-9 py-2 text-sm"
+          />
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {filteredLabels.map((item, idx) => (
-          <div key={item._id || idx} className="card p-4 flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-leaf truncate">Lot: {item.lotNo}</span>
-                <span className="text-xs px-2 py-0.5 bg-stone-100 rounded-full text-stone-500">{item.crop}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {filtered.map((item, idx) => {
+          const purity = (item as any).physicalPurity;
+          return (
+            <div key={item._id || idx} className="lot-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
+                    <span className="font-display font-bold text-leaf text-[15px] truncate">{item.lotNo}</span>
+                    <span className="crop-tag">{item.crop || '—'}</span>
+                  </div>
+                  <p className="text-[13px] text-stone-600 mt-0.5 truncate">{item.variety || ''}</p>
+                  <p className="text-[12px] text-stone-400 mt-1">
+                    Valid {item.validUpto || '—'} · {item.netWeight || '—'}
+                    {purity ? <> · Purity {purity}</> : null}
+                  </p>
+                  {item.shortUrl && (
+                    <a href={item.shortUrl} target="_blank" rel="noreferrer" className="short-badge">
+                      <Link2 size={11} /> Short link
+                    </a>
+                  )}
+                </div>
+                <button
+                  onClick={() => onViewQR(item)}
+                  className="btn-ghost p-2"
+                  title="View QR"
+                >
+                  <QrCode size={18} />
+                </button>
               </div>
-              <p className="text-xs text-stone-500 truncate">{item.variety} | {item.netWeight} | ₹{item.mrp}</p>
+
+              <div className="flex gap-2 mt-3 pt-3 border-t border-stone-100">
+                <button onClick={() => onEdit(item)} className="btn-outline flex-1 py-1.5 text-xs">
+                  <Edit2 size={13} /> Edit
+                </button>
+                <button
+                  onClick={() => window.open(`https://verify.spiceveg.in/?id=${item.lotNo}`, '_blank')}
+                  className="btn-outline flex-1 py-1.5 text-xs"
+                >
+                  <ExternalLink size={13} /> Open
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => onViewQR(item)}
-                className="p-2 text-stone-400 hover:text-leaf hover:bg-leaf/10 rounded-lg transition-colors"
-                title="View QR"
-              >
-                <QrCode size={20} />
-              </button>
-              <button 
-                onClick={() => onEdit(item)}
-                className="p-2 text-stone-400 hover:text-leaf hover:bg-leaf/10 rounded-lg transition-colors"
-                title="Edit"
-              >
-                <Edit2 size={20} />
-              </button>
-              <button 
-                onClick={() => window.open(`https://verify.spiceveg.in/?id=${item.lotNo}`, '_blank')}
-                className="p-2 text-stone-400 hover:text-leaf hover:bg-leaf/10 rounded-lg transition-colors"
-                title="Preview"
-              >
-                <ExternalLink size={20} />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      
-      {filteredLabels.length === 0 && (
-        <p className="text-center py-10 text-stone-400 italic">No matching records found.</p>
+
+      {filtered.length === 0 && (
+        <p className="text-center py-12 text-stone-400 italic text-sm">No matching records.</p>
       )}
     </div>
   );
