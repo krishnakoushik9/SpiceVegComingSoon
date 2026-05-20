@@ -3,16 +3,21 @@ import React, { useState, useEffect } from 'react';
 import { LabelForm } from '@/components/LabelForm';
 import { LabelList } from '@/components/LabelList';
 import { PrintTemplate } from '@/components/PrintTemplate';
+import { PrintMany } from '@/components/PrintMany';
+import { QRSheet } from '@/components/QRSheet';
 import { SeedLabel } from '@spiceveg/types';
-import { LogOut, Package, Printer, Download, QrCode } from 'lucide-react';
+import { LogOut, Package, Printer, Download, QrCode, ShieldCheck, Radio, Fingerprint } from 'lucide-react';
 import { clsx } from 'clsx';
 import { QRCodeSVG } from 'qrcode.react';
 import LoginPage from '@/components/Login';
+import { LotRecord } from '@/lib/export';
 
 const FB_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4";
 const FB_PROJECT = "spice-veg-agri";
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
 const COLLECTION = "seed_labels";
+
+type PrintMode = 'single' | 'many' | 'sheet';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'new' | 'list'>('new');
@@ -21,6 +26,8 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [printData, setPrintData] = useState<{ data: SeedLabel; shortUrl: string } | null>(null);
   const [editingLabel, setEditingLabel] = useState<SeedLabel | undefined>();
+  const [printMode, setPrintMode] = useState<PrintMode>('single');
+  const [batchLots, setBatchLots] = useState<LotRecord[]>([]);
 
   useEffect(() => {
     if (localStorage.getItem("admin-token")) {
@@ -73,6 +80,7 @@ export default function AdminPage() {
       });
       const { short } = await shortRes.json();
       setPrintData({ data, shortUrl: short || verifyUrl });
+      setPrintMode('single');
       fetchLabels();
     } catch (e) {
       alert('Error connecting to API');
@@ -81,7 +89,24 @@ export default function AdminPage() {
     }
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    setPrintMode('single');
+    setTimeout(() => window.print(), 50);
+  };
+
+  const handlePrintLabels = (lots: LotRecord[]) => {
+    if (!lots.length) { alert('Nothing to print — select lots or adjust filters.'); return; }
+    setBatchLots(lots);
+    setPrintMode('many');
+    setTimeout(() => window.print(), 80);
+  };
+
+  const handlePrintSheet = (lots: LotRecord[]) => {
+    if (!lots.length) { alert('Nothing to render — select lots or adjust filters.'); return; }
+    setBatchLots(lots);
+    setPrintMode('sheet');
+    setTimeout(() => window.print(), 80);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("admin-token");
@@ -91,12 +116,12 @@ export default function AdminPage() {
   if (!isAuthenticated) return <LoginPage />;
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream ambient-bg">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-white border-b border-stone-100 no-print">
+      <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-stone-100 no-print">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-leaf rounded-xl flex items-center justify-center text-white">
+            <div className="w-9 h-9 bg-leaf rounded-xl flex items-center justify-center text-white logo-pulse">
               <Package size={18} />
             </div>
             <div className="leading-tight">
@@ -130,12 +155,21 @@ export default function AdminPage() {
             <LogOut size={18} />
           </button>
         </div>
+
+        {/* Trust strip */}
+        <div className="border-t border-stone-100 bg-white/60">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-medium tracking-wide">
+            <span className="trust-badge"><ShieldCheck size={11} /> Firebase Secured</span>
+            <span className="trust-badge"><Radio size={11} className="trust-pulse" /> Real-time Verified</span>
+            <span className="trust-badge"><Fingerprint size={11} /> Traceable Batch Record</span>
+            <span className="ml-auto text-stone-400">{labels.length} lot{labels.length === 1 ? '' : 's'} on chain-of-trust</span>
+          </div>
+        </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 no-print">
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 no-print relative">
         {activeTab === 'new' ? (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            {/* Form */}
             <div className="card">
               <LabelForm
                 onSubmit={handleSave}
@@ -144,8 +178,7 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* QR Side Panel */}
-            <aside className="side-card lg:sticky lg:top-20 lg:self-start">
+            <aside className="side-card lg:sticky lg:top-28 lg:self-start">
               {!printData ? (
                 <div className="text-center py-12 px-4 text-stone-400">
                   <QrCode size={44} strokeWidth={1.5} className="mx-auto mb-3 text-stone-300" />
@@ -179,27 +212,44 @@ export default function AdminPage() {
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <LabelList
-              labels={labels as any}
+              labels={labels as LotRecord[]}
               onEdit={(l) => { setEditingLabel(l); setActiveTab('new'); }}
               onViewQR={(l) => {
                 setPrintData({ data: l, shortUrl: (l as any).shortUrl || `https://verify.spiceveg.in/?id=${l.lotNo}` });
+                setPrintMode('single');
                 setActiveTab('new');
               }}
+              onPrintLabels={handlePrintLabels}
+              onPrintSheet={handlePrintSheet}
             />
           </div>
         )}
+
+        {/* Decorative ambient orbs */}
+        <div aria-hidden className="ambient-orb ambient-orb-a" />
+        <div aria-hidden className="ambient-orb ambient-orb-b" />
       </main>
 
-      {printData && (
+      {/* Print surfaces — only one renders at a time */}
+      {printData && printMode === 'single' && (
         <div className="hidden print:block">
           <PrintTemplate data={printData.data} shortUrl={printData.shortUrl} />
         </div>
       )}
+      {printMode === 'many' && batchLots.length > 0 && (
+        <div className="hidden print:block">
+          <PrintMany lots={batchLots} />
+        </div>
+      )}
+      {printMode === 'sheet' && batchLots.length > 0 && (
+        <div className="hidden print:block">
+          <QRSheet lots={batchLots} />
+        </div>
+      )}
 
       <footer className="max-w-7xl mx-auto px-6 py-8 text-center text-[10px] text-stone-400 uppercase tracking-[0.2em] font-medium no-print">
-        © 2026 Spice Veg Agri · v2.0.0
+        © 2026 Spice Veg Agri · v2.1.0
       </footer>
     </div>
   );
 }
-

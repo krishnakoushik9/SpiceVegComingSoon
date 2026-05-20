@@ -75,6 +75,121 @@
   .lot-card {
     @apply bg-white border border-stone-100 rounded-2xl p-4 transition-all hover:border-stone-300 hover:shadow-sm;
   }
+
+  .trust-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-leaf/5 text-leaf border border-leaf/10 text-[10px] font-semibold uppercase tracking-wide;
+  }
+}
+
+/* Ambient motion */
+.ambient-bg {
+  position: relative;
+  overflow-x: clip;
+}
+
+.ambient-orb {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+}
+.ambient-orb-a {
+  top: -120px;
+  left: -160px;
+  background: radial-gradient(circle at 30% 30%, rgba(59, 109, 17, 0.18), transparent 70%);
+  animation: orb-drift-a 22s ease-in-out infinite alternate;
+}
+.ambient-orb-b {
+  bottom: -200px;
+  right: -200px;
+  background: radial-gradient(circle at 70% 70%, rgba(192, 221, 151, 0.22), transparent 70%);
+  animation: orb-drift-b 28s ease-in-out infinite alternate;
+}
+
+@keyframes orb-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(60px, 40px, 0) scale(1.05); }
+}
+@keyframes orb-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-50px, -30px, 0) scale(1.08); }
+}
+
+@keyframes logo-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 109, 17, 0.35); }
+  50%      { box-shadow: 0 0 0 6px rgba(59, 109, 17, 0); }
+}
+.logo-pulse {
+  animation: logo-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes trust-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+.trust-pulse {
+  animation: trust-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb,
+  .logo-pulse,
+  .trust-pulse {
+    animation: none !important;
+  }
+}
+
+/* QR sheet layout */
+.qr-sheet-page {
+  padding: 10mm;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  page: qrsheet;
+}
+@page qrsheet { size: A4; margin: 8mm; }
+.qr-sheet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 4mm;
+  border-bottom: 0.3mm solid #d6d3d1;
+  margin-bottom: 4mm;
+}
+.qr-sheet-brand { font-weight: 700; font-size: 11pt; }
+.qr-sheet-meta  { font-size: 8pt; color: #57534e; }
+.qr-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+}
+.qr-sheet-cell {
+  border: 0.3mm solid #e7e5e4;
+  border-radius: 2mm;
+  padding: 3mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  break-inside: avoid;
+}
+.qr-sheet-cell-qr { padding: 1mm; background: #fff; }
+.qr-sheet-cell-body { margin-top: 2mm; width: 100%; }
+.qr-sheet-cell-lot  { font-weight: 700; font-size: 9pt; }
+.qr-sheet-cell-crop { font-size: 7.5pt; color: #44403c; }
+.qr-sheet-cell-meta { font-size: 6.5pt; color: #78716c; margin-top: 0.5mm; }
+
+/* Multi-label print: page-break between labels */
+.print-many-page {
+  break-after: page;
+  page-break-after: always;
+}
+.print-many-page:last-child {
+  break-after: auto;
+  page-break-after: auto;
 }
 
 /* Print Overrides */
@@ -82,15 +197,19 @@
   .no-print {
     display: none !important;
   }
-  
+
   body {
     background: white !important;
     padding: 0 !important;
     margin: 0 !important;
   }
 
+  .ambient-orb { display: none !important; }
+
   @page {
     margin: 0;
     size: 60mm auto;
   }
+
+  #qr-sheet { width: 210mm; }
 }
