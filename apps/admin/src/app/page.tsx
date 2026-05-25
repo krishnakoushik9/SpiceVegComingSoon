@@ -11,6 +11,7 @@ import { clsx } from 'clsx';
 import { QRCodeSVG } from 'qrcode.react';
 import LoginPage from '@/components/Login';
 import { LotRecord } from '@/lib/export';
+import { AIAssistant } from '@/components/AIAssistant';
 
 const FB_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4";
 const FB_PROJECT = "spice-veg-agri";
@@ -28,6 +29,7 @@ export default function AdminPage() {
   const [editingLabel, setEditingLabel] = useState<SeedLabel | undefined>();
   const [printMode, setPrintMode] = useState<PrintMode>('single');
   const [batchLots, setBatchLots] = useState<LotRecord[]>([]);
+  const [aiFilter, setAiFilter] = useState<{ lots: LotRecord[]; label: string } | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem("admin-token")) {
@@ -210,9 +212,25 @@ export default function AdminPage() {
             </aside>
           </div>
         ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">
+            {aiFilter && (
+              <div className="flex items-center justify-between gap-3 bg-leaf/5 border border-leaf/20 rounded-xl px-3 py-2 text-[12px]">
+                <div className="flex items-center gap-2 min-w-0 text-leaf">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-leaf" />
+                  <span className="font-semibold truncate">AI filter:</span>
+                  <span className="text-stone-600 truncate">“{aiFilter.label}”</span>
+                  <span className="text-stone-400 shrink-0">· {aiFilter.lots.length} match{aiFilter.lots.length === 1 ? '' : 'es'}</span>
+                </div>
+                <button
+                  onClick={() => setAiFilter(null)}
+                  className="text-[11px] font-semibold text-stone-500 hover:text-forest"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <LabelList
-              labels={labels as LotRecord[]}
+              labels={(aiFilter ? aiFilter.lots : (labels as LotRecord[]))}
               onEdit={(l) => { setEditingLabel(l); setActiveTab('new'); }}
               onViewQR={(l) => {
                 setPrintData({ data: l, shortUrl: (l as any).shortUrl || `https://verify.spiceveg.in/?id=${l.lotNo}` });
@@ -250,6 +268,19 @@ export default function AdminPage() {
       <footer className="max-w-7xl mx-auto px-6 py-8 text-center text-[10px] text-stone-400 uppercase tracking-[0.2em] font-medium no-print">
         © 2026 Spice Veg Agri · v2.1.0
       </footer>
+
+      <AIAssistant
+        lots={labels as LotRecord[]}
+        onOpenLot={(l) => {
+          setPrintData({ data: l, shortUrl: (l as any).shortUrl || `https://verify.spiceveg.in/?id=${l.lotNo}` });
+          setPrintMode('single');
+          setActiveTab('new');
+        }}
+        onApplyFilter={(lots, label) => {
+          setAiFilter({ lots, label });
+          setActiveTab('list');
+        }}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { ShortLinkMetadata } from '@spiceveg/types'
 import lots from './routes/lots'
 import auth from './routes/auth'
+import ai from './routes/ai'
 
 type Bindings = {
   SHORT_LINKS: KVNamespace
@@ -14,6 +15,7 @@ type Bindings = {
   FIREBASE_PROJECT_ID: string
   FIREBASE_API_KEY: string
   FIREBASE_COLLECTION: string
+  GEMINI_API_KEY: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -51,6 +53,7 @@ app.get('/qr/:slug', async (c) => {
 // --- API SUB-APP ---
 app.route('/api/v1/lots', lots)
 app.route('/api/v1/auth', auth)
+app.route('/api/v1/ai', ai)
 
 app.get('/api/v1/health', (c) => {
   return c.json({ status: 'ok', service: 'SpiceVeg API' })
