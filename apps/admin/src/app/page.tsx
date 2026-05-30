@@ -15,7 +15,7 @@ import { AIAssistant } from '@/components/AIAssistant';
 import { auth } from '@/lib/firebase-auth';
 import { onAuthStateChanged } from 'firebase/auth';
 
-const FB_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4";
+const FB_API_KEY = "AIzaSyCXx0h_4FVtBnM83-QRP4MhwPB3juiDSr4";
 const FB_PROJECT = "spice-veg-agri";
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
 const COLLECTION = "seed_labels";
