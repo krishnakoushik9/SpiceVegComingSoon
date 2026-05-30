@@ -12,6 +12,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import LoginPage from '@/components/Login';
 import { LotRecord } from '@/lib/export';
 import { AIAssistant } from '@/components/AIAssistant';
+import { auth } from '@/lib/firebase-auth';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const FB_API_KEY = "AIzaSyCXh_4FVtBnM83-QRP4MhwPB3juiDSr4";
 const FB_PROJECT = "spice-veg-agri";
@@ -32,10 +34,30 @@ export default function AdminPage() {
   const [aiFilter, setAiFilter] = useState<{ lots: LotRecord[]; label: string } | null>(null);
 
   useEffect(() => {
+    // 1. Restore from localStorage if already set via slider or previous active token
     if (localStorage.getItem("admin-token")) {
       setIsAuthenticated(true);
       fetchLabels();
     }
+
+    // 2. Firebase session persistence: check if Firebase authentication is already active
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.phoneNumber) {
+        const ALLOWED_NUMBERS = [
+          "+917842744576",
+          "+918019435543",
+          "+919177155542"
+        ];
+        if (ALLOWED_NUMBERS.includes(user.phoneNumber)) {
+          localStorage.setItem("admin-token", "admin-token");
+          localStorage.setItem("admin-phone", user.phoneNumber);
+          setIsAuthenticated(true);
+          fetchLabels();
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   async function fetchLabels() {
@@ -110,8 +132,14 @@ export default function AdminPage() {
     setTimeout(() => window.print(), 80);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem("admin-token");
+    localStorage.removeItem("admin-phone");
+    try {
+      await auth.signOut();
+    } catch (err) {
+      console.error("Firebase sign out failed:", err);
+    }
     window.location.href = "/";
   };
 

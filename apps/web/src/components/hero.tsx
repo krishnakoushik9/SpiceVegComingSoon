@@ -24,66 +24,29 @@ const HandUnderline: React.FC<{ className?: string }> = ({ className = "" }) => 
   </svg>
 );
 
-const ScribbleArrow: React.FC<{ className?: string }> = ({ className = "" }) => (
+const LeafMark: React.FC<{ className?: string }> = ({ className = "" }) => (
   <svg
-    viewBox="0 0 80 60"
+    viewBox="0 0 64 64"
     fill="none"
     aria-hidden="true"
     className={className}
   >
     <path
-      d="M70 4 C 50 16, 30 28, 14 46"
-      stroke="#202A2D"
-      strokeWidth="1.4"
+      d="M32 50 V28"
+      stroke="currentColor"
+      strokeWidth="1.6"
       strokeLinecap="round"
-      strokeDasharray="2 4"
+      opacity="0.7"
+    />
+    <path
+      d="M32 32 C24 30 18 22 18 14 C26 14 32 22 32 32 Z"
+      fill="currentColor"
+      opacity="0.85"
+    />
+    <path
+      d="M32 34 C40 32 46 24 46 16 C38 16 32 24 32 34 Z"
+      fill="currentColor"
       opacity="0.55"
-    />
-    <path
-      d="M14 46 L 22 38 M 14 46 L 10 36"
-      stroke="#202A2D"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      opacity="0.6"
-    />
-  </svg>
-);
-
-const RoundStamp: React.FC<{ className?: string }> = ({ className = "" }) => (
-  <svg
-    viewBox="0 0 160 160"
-    fill="none"
-    aria-hidden="true"
-    className={className}
-  >
-    <defs>
-      <path
-        id="stampCirc"
-        d="M 80,80 m -64,0 a 64,64 0 1,1 128,0 a 64,64 0 1,1 -128,0"
-      />
-    </defs>
-    <circle
-      cx="80"
-      cy="80"
-      r="68"
-      stroke="#202A2D"
-      strokeWidth="0.8"
-      strokeDasharray="2 3"
-      fill="none"
-      opacity="0.5"
-    />
-    <text fill="#202A2D" opacity="0.7" style={{ fontFamily: "var(--font-jetbrains)", fontSize: 11, letterSpacing: 4 }}>
-      <textPath href="#stampCirc" startOffset="0">
-        ROOTED IN TRUST · GROWING THE FUTURE ·
-      </textPath>
-    </text>
-    {/* Leaf inside */}
-    <path
-      d="M80 100 V70 M80 78 C72 76 66 68 66 60 C74 60 80 68 80 78 Z M80 80 C88 78 94 70 94 62 C86 62 80 70 80 80 Z"
-      stroke="#202A2D"
-      strokeWidth="1.2"
-      fill="none"
-      opacity="0.65"
     />
   </svg>
 );
@@ -92,16 +55,26 @@ export const Hero: React.FC = () => {
   return (
     <section
       id="hero"
-      className="relative min-h-screen pt-32 md:pt-36 lg:pt-40 pb-20 overflow-hidden bg-bg-primary"
+      className="relative min-h-screen pt-20 md:pt-24 lg:pt-28 pb-20 overflow-hidden bg-bg-primary"
     >
+      {/* Tiny floating logo mark */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.6, delay: 0.6, ease }}
+        className="absolute top-6 left-6 md:top-8 md:left-10 lg:top-10 lg:left-14 z-20 flex items-center gap-2 text-ink/80"
+      >
+        <LeafMark className="w-6 h-6 md:w-7 md:h-7" />
+        <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-[0.32em] text-ink/55">
+          Spice Veg Agri
+        </span>
+      </motion.div>
+
       {/* Gradient mesh atmosphere */}
       <div className="gradient-mesh" />
 
       {/* Light rays — desktop dominant, soft on mobile */}
       <LightRays intensity={0.95} followMouse />
-
-      {/* Round stamp (left edge) */}
-      <RoundStamp className="hidden md:block absolute top-[28%] -left-12 lg:left-4 w-28 lg:w-36 opacity-80 animate-[spin_60s_linear_infinite]" />
 
       <div className="relative z-10 max-w-[1600px] mx-auto px-5 md:px-10 lg:px-14 grid lg:grid-cols-[1.05fr_1fr] gap-10 lg:gap-16 items-center">
         {/* Left — copy */}
@@ -151,23 +124,6 @@ export const Hero: React.FC = () => {
               <HandUnderline className="absolute -bottom-1 left-0 w-[80%] h-3" />
             </motion.span>
           </h1>
-
-          {/* Handwritten side note (desktop) */}
-          <motion.div
-            initial={{ opacity: 0, rotate: -4, scale: 0.95 }}
-            animate={{ opacity: 1, rotate: -3, scale: 1 }}
-            transition={{ duration: 1, delay: 1.0, ease }}
-            className="hidden lg:flex items-start gap-3 absolute top-[30%] -right-2 xl:-right-10 max-w-[180px]"
-          >
-            <div>
-              <div className="font-hand text-2xl xl:text-3xl text-ink/80 leading-[1.1]">
-                For farmers.<br />
-                For families.<br />
-                For generations.
-              </div>
-            </div>
-            <ScribbleArrow className="w-14 xl:w-16 -mt-2" />
-          </motion.div>
 
           {/* Body copy */}
           <motion.p

@@ -1,11 +1,9 @@
 "use client";
 import React, { useState } from "react";
 import { motion, useScroll, useSpring } from "framer-motion";
-import { Navbar } from "@/components/navbar";
 import { Hero } from "@/components/hero";
 import { PhilosophySection } from "@/components/philosophy-section";
 import { ShowcaseSection } from "@/components/showcase-section";
-import { JourneySection } from "@/components/journey-section";
 import { CTASection } from "@/components/cta-section";
 import { Footer } from "@/components/footer";
 import { BlueprintModal } from "@/components/blueprint-modal";
@@ -30,12 +28,9 @@ export default function Home() {
         style={{ scaleX }}
       />
 
-      <Navbar onOpenBlueprint={() => setIsModalOpen(true)} />
-
       <Hero />
       <PhilosophySection />
       <ShowcaseSection />
-      <JourneySection />
       <CTASection onOpenBlueprint={() => setIsModalOpen(true)} />
       <Footer />
 

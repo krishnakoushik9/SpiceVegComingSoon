@@ -135,11 +135,6 @@ export const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a href="#journey" className="hover:text-bg-primary transition">
-                  Innovation
-                </a>
-              </li>
-              <li>
                 <a
                   href="https://verify.spiceveg.in"
                   className="hover:text-bg-primary transition"
