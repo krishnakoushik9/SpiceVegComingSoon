@@ -55,8 +55,11 @@ export default function LoginPage() {
 
   // OTP Helper Functions
   const formatPhoneNumber = (value: string) => {
-    const cleaned = value.replace(/\D/g, "")
-    const digits = cleaned.slice(cleaned.startsWith("91") && cleaned.length > 10 ? 2 : 0).slice(0, 10)
+    let cleaned = value.replace(/\D/g, "")
+    if (cleaned.startsWith("91")) {
+      cleaned = cleaned.slice(2)
+    }
+    const digits = cleaned.slice(0, 10)
     if (digits.length === 0) return ""
     if (digits.length <= 5) {
       return `+91 ${digits}`
