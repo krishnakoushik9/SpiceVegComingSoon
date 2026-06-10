@@ -20,6 +20,11 @@ dist/
 .env.test.local
 .env.production.local
 
+# AI/ML model files (too large for git, deployed separately)
+apps/Model-ML/
+*.litertlm
+apps/admin/public/models/
+
 # misc
 .DS_Store
 *.log

@@ -3,12 +3,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Sparkles, X, Send, Loader2, Lock, ShieldCheck, ExternalLink,
   Copy, FileDown, Eye, MessageSquare, RefreshCw, ChevronDown,
+  AlertTriangle, Cpu, Zap, WifiOff, CheckCircle2,
 } from 'lucide-react';
 import { LotRecord, exportLotsToCsv, getVerificationStatus, verifyUrlFor } from '@/lib/export';
 import { AIIntent, applyIntent, buildContext, findDuplicates } from '@/lib/aiIntent';
 import { getUsage, incrementUsage, grantBonus, AIUsageSnapshot } from '@/lib/aiUsage';
-
-const API_BASE = 'https://api.spiceveg.in';
+import { litertEngine, EngineState } from '@/lib/litertEngine';
 
 interface AIAssistantProps {
   lots: LotRecord[];
@@ -33,6 +33,26 @@ const SUGGESTIONS = [
   'Recently edited lots',
 ];
 
+/** Try to parse a JSON intent from model output, stripping any surrounding text */
+function parseIntentFromResponse(raw: string): AIIntent | null {
+  // Try direct parse first
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.intent) return parsed;
+  } catch { /* continue */ }
+
+  // Try extracting JSON from code blocks or surrounding text
+  const jsonMatch = raw.match(/\{[\s\S]*"intent"[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed && parsed.intent) return parsed;
+    } catch { /* continue */ }
+  }
+
+  return null;
+}
+
 export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApplyFilter }) => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -41,9 +61,35 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
   const [usage, setUsage] = useState<AIUsageSnapshot>(() => getUsage());
   const [unlockState, setUnlockState] = useState<'idle' | 'verifying' | 'granted'>('idle');
   const [unlockStep, setUnlockStep] = useState(0);
+  const [engineState, setEngineState] = useState<EngineState>({ status: 'idle' });
+  const [showBanner, setShowBanner] = useState(true);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Subscribe to engine state
+  useEffect(() => {
+    const unsub = litertEngine.subscribe(setEngineState);
+    return unsub;
+  }, []);
+
+  // Check if banner was previously dismissed this session
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem('spiceveg-ai-banner-dismissed');
+    if (dismissed) {
+      setBannerDismissed(true);
+      setShowBanner(false);
+    }
+  }, []);
+
+  // Initialize engine when assistant is opened
+  useEffect(() => {
+    if (open && engineState.status === 'idle') {
+      litertEngine.initialize();
+    }
+  }, [open, engineState.status]);
 
   // refresh usage when reopening (clock may have ticked into a new day)
   useEffect(() => {
@@ -54,7 +100,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
     if (!open) return;
     const t = setTimeout(() => scrollRef.current?.scrollTo({ top: 999999, behavior: 'smooth' }), 30);
     return () => clearTimeout(t);
-  }, [messages, open, loading]);
+  }, [messages, open, loading, streamingText]);
 
   // keyboard shortcut: ⌘K / Ctrl+K toggles the assistant
   useEffect(() => {
@@ -89,46 +135,85 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
       return;
     }
 
+    if (engineState.status !== 'ready') {
+      setMessages((m) => [...m, {
+        id: `e-${Date.now()}`,
+        role: 'error',
+        text: engineState.status === 'loading'
+          ? 'Model is still loading. Please wait a moment and try again.'
+          : engineState.status === 'unsupported'
+          ? 'WebGPU is not supported in this browser. Please use Chrome 113+.'
+          : 'Model is not ready. Please wait for initialization.',
+        ts: Date.now(),
+      }]);
+      return;
+    }
+
     const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text, ts: Date.now() };
     setMessages((m) => [...m, userMsg]);
     setInput('');
     setLoading(true);
+    setStreamingText('');
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Client': 'spiceveg-admin-panel',
+      const ctx = buildContext(lots);
+      const contextLine =
+        `Inventory snapshot: ${ctx.lotCount} total lots.` +
+        (ctx.cropBreakdown
+          ? ` By crop: ${Object.entries(ctx.cropBreakdown)
+              .slice(0, 8)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(', ')}.`
+          : '') +
+        (ctx.recentLots && ctx.recentLots.length
+          ? ` Recent lots: ${ctx.recentLots.slice(0, 5).join(', ')}.`
+          : '');
+
+      const fullResponse = await litertEngine.sendMessage(
+        text,
+        contextLine,
+        (chunk) => {
+          setStreamingText((prev) => prev + chunk);
         },
-        body: JSON.stringify({
-          message: text,
-          context: buildContext(lots),
-        }),
-      });
+      );
 
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(errBody.error || `Server ${res.status}`);
+      setStreamingText('');
+
+      // Try to parse JSON intent from response
+      const intent = parseIntentFromResponse(fullResponse);
+
+      if (intent) {
+        if (!intent.filter) intent.filter = {};
+        if (!intent.actions) intent.actions = [];
+
+        const matches = intent.intent === 'help' || intent.intent === 'unknown'
+          ? []
+          : buildResultsForIntent(intent);
+
+        const assistantMsg: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          text: intent.message || 'Here are the results.',
+          intent,
+          matches,
+          ts: Date.now(),
+        };
+        setMessages((m) => [...m, assistantMsg]);
+      } else {
+        // Model returned free-form text, show it directly
+        const assistantMsg: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          text: fullResponse.slice(0, 300),
+          ts: Date.now(),
+        };
+        setMessages((m) => [...m, assistantMsg]);
       }
-      const data = (await res.json()) as { ok: boolean; intent: AIIntent };
-      const intent = data.intent;
-      const matches = intent.intent === 'help' || intent.intent === 'unknown'
-        ? []
-        : buildResultsForIntent(intent);
 
-      const assistantMsg: ChatMessage = {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        text: intent.message,
-        intent,
-        matches,
-        ts: Date.now(),
-      };
-      setMessages((m) => [...m, assistantMsg]);
       setUsage(incrementUsage());
     } catch (e) {
-      const errText = e instanceof Error ? e.message : 'Connection error';
+      setStreamingText('');
+      const errText = e instanceof Error ? e.message : 'Model error';
       setMessages((m) => [
         ...m,
         { id: `e-${Date.now()}`, role: 'error', text: errText, ts: Date.now() },
@@ -137,7 +222,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 30);
     }
-  }, [input, loading, lots, buildResultsForIntent]);
+  }, [input, loading, lots, buildResultsForIntent, engineState.status]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -172,10 +257,18 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
     setTimeout(tick, 600);
   }, [unlockState]);
 
-  const resetChat = () => {
+  const resetChat = async () => {
     setMessages([]);
     setInput('');
+    setStreamingText('');
+    await litertEngine.resetConversation();
     inputRef.current?.focus();
+  };
+
+  const dismissBanner = () => {
+    setShowBanner(false);
+    setBannerDismissed(true);
+    sessionStorage.setItem('spiceveg-ai-banner-dismissed', 'true');
   };
 
   const renderActions = (msg: ChatMessage) => {
@@ -255,6 +348,35 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
     );
   };
 
+  const renderEngineStatus = () => {
+    if (engineState.status === 'ready') return null;
+
+    const statusConfig: Record<string, { icon: React.ReactNode; text: string; cls: string }> = {
+      idle: { icon: <Cpu size={13} />, text: 'AI model idle', cls: 'text-stone-400' },
+      checking: { icon: <Loader2 size={13} className="animate-spin" />, text: 'Checking WebGPU…', cls: 'text-blue-500' },
+      loading: { icon: <Loader2 size={13} className="animate-spin" />, text: engineState.progress || 'Loading model…', cls: 'text-amber-600' },
+      error: { icon: <AlertTriangle size={13} />, text: engineState.error || 'Model error', cls: 'text-red-500' },
+      unsupported: { icon: <WifiOff size={13} />, text: engineState.error || 'WebGPU unavailable', cls: 'text-red-500' },
+    };
+
+    const cfg = statusConfig[engineState.status] || statusConfig.idle;
+
+    return (
+      <div className={`ai-engine-status ${cfg.cls}`}>
+        {cfg.icon}
+        <span className="text-[10.5px] font-medium truncate">{cfg.text}</span>
+        {engineState.status === 'error' && (
+          <button
+            onClick={() => litertEngine.initialize()}
+            className="ml-auto text-[10px] font-semibold text-leaf hover:text-forest underline"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const emptyState = messages.length === 0;
   const locked = usage.locked || unlockState === 'verifying' || unlockState === 'granted';
 
@@ -276,6 +398,73 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
       {/* Backdrop on mobile */}
       {open && <div className="ai-backdrop md:hidden" onClick={() => setOpen(false)} />}
 
+      {/* Phase-out Banner Modal */}
+      {open && showBanner && !bannerDismissed && (
+        <div className="ai-phaseout-overlay" onClick={dismissBanner}>
+          <div className="ai-phaseout-banner" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-phaseout-glow" />
+            <div className="ai-phaseout-content">
+              <div className="ai-phaseout-icon-wrap">
+                <div className="ai-phaseout-icon-ring">
+                  <Zap size={22} className="text-emerald-400" />
+                </div>
+              </div>
+
+              <h3 className="ai-phaseout-title">
+                AI Assistant Upgrade
+              </h3>
+
+              <div className="ai-phaseout-badge">
+                <Cpu size={12} />
+                <span>Powered by Gemma 4 · WebGPU</span>
+              </div>
+
+              <p className="ai-phaseout-body">
+                The <strong>online Gemini AI</strong> service is being <strong>phased out</strong>.
+                A new <strong>on-device AI model</strong> is now active — powered by
+                Google's <strong>Gemma 4 E2B</strong> running directly in your browser via <strong>WebGPU</strong>.
+              </p>
+
+              <div className="ai-phaseout-features">
+                <div className="ai-phaseout-feature">
+                  <WifiOff size={14} className="text-emerald-400" />
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Runs Offline</div>
+                    <div className="text-[10px] text-stone-400">No internet needed after model loads</div>
+                  </div>
+                </div>
+                <div className="ai-phaseout-feature">
+                  <ShieldCheck size={14} className="text-emerald-400" />
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Private & Secure</div>
+                    <div className="text-[10px] text-stone-400">Data never leaves your device</div>
+                  </div>
+                </div>
+                <div className="ai-phaseout-feature">
+                  <Zap size={14} className="text-emerald-400" />
+                  <div>
+                    <div className="font-semibold text-[11.5px]">Zero Latency</div>
+                    <div className="text-[10px] text-stone-400">No API calls, instant responses</div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={dismissBanner}
+                className="ai-phaseout-cta"
+              >
+                <Sparkles size={14} />
+                Start Conversation
+              </button>
+
+              <p className="ai-phaseout-note">
+                Requires Chrome 113+ with WebGPU · ~2GB model download on first use
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dock */}
       <aside
         className={`ai-dock ${open ? 'ai-dock-open' : ''}`}
@@ -283,13 +472,18 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
       >
         <header className="ai-dock-head">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-leaf/10 text-leaf flex items-center justify-center shrink-0">
-              <Sparkles size={14} />
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+              <Cpu size={14} />
             </div>
             <div className="min-w-0">
               <div className="font-semibold text-forest text-[13px] truncate">Operations Assistant</div>
-              <div className="text-[10px] text-stone-400 uppercase tracking-widest font-semibold">
-                Gemini · internal
+              <div className="text-[10px] text-stone-400 uppercase tracking-widest font-semibold flex items-center gap-1">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                  engineState.status === 'ready' ? 'bg-emerald-500 animate-pulse' :
+                  engineState.status === 'loading' ? 'bg-amber-500 animate-pulse' :
+                  'bg-stone-300'
+                }`} />
+                Gemma 4 · on-device
               </div>
             </div>
           </div>
@@ -304,6 +498,9 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
             </button>
           </div>
         </header>
+
+        {/* Engine status indicator */}
+        {renderEngineStatus()}
 
         <div className="ai-usage-bar">
           <div className="flex items-center gap-1.5 text-[10px] text-stone-500 font-semibold uppercase tracking-wider">
@@ -326,6 +523,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               <div className="text-[13px] font-semibold text-forest">How can I help?</div>
               <div className="text-[11px] text-stone-500 mt-1 mb-3">
                 I can search lots, summarize inventory, and detect anomalies.
+                <br />
+                <span className="text-emerald-600 font-medium">Running on-device with Gemma 4 via WebGPU.</span>
               </div>
               <div className="flex flex-col gap-1.5 w-full">
                 {SUGGESTIONS.map((s) => (
@@ -333,7 +532,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
                     key={s}
                     onClick={() => send(s)}
                     className="ai-suggest"
-                    disabled={locked}
+                    disabled={locked || engineState.status !== 'ready'}
                   >
                     {s}
                   </button>
@@ -363,7 +562,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               )}
               {msg.role === 'error' && (
                 <div className="ai-bubble-error">
-                  <span className="font-semibold">Couldn’t reach assistant.</span> {msg.text}
+                  <span className="font-semibold">Error:</span> {msg.text}
                 </div>
               )}
             </div>
@@ -371,9 +570,18 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
 
           {loading && (
             <div className="ai-msg ai-msg-assistant">
-              <div className="ai-bubble-assistant flex items-center gap-2 text-stone-400 text-[12px]">
-                <Loader2 size={13} className="animate-spin" />
-                Thinking…
+              <div className="ai-bubble-assistant">
+                {streamingText ? (
+                  <div className="text-[12.5px] leading-relaxed">
+                    {streamingText}
+                    <span className="inline-block w-1.5 h-4 bg-leaf/60 animate-pulse ml-0.5 rounded-sm" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-stone-400 text-[12px]">
+                    <Loader2 size={13} className="animate-spin" />
+                    Processing with Gemma 4…
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -386,7 +594,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               <div className="text-[12px] font-semibold text-forest">Daily limit reached</div>
             </div>
             <div className="text-[11px] text-stone-500 mb-3 leading-relaxed">
-              You’ve used {usage.used} of {usage.limit} queries.
+              You've used {usage.used} of {usage.limit} queries.
               Quota resets at midnight. Need more right now?
             </div>
             {unlockState === 'idle' && (
@@ -423,14 +631,20 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask about lots, inventory, anomalies…"
+              placeholder={
+                engineState.status === 'ready'
+                  ? 'Ask about lots, inventory, anomalies…'
+                  : engineState.status === 'loading'
+                  ? 'Model loading… please wait'
+                  : 'Initializing AI model…'
+              }
               rows={1}
               className="ai-textarea"
-              disabled={loading}
+              disabled={loading || engineState.status !== 'ready'}
             />
             <button
               type="submit"
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || engineState.status !== 'ready'}
               className="ai-send"
               aria-label="Send"
             >
