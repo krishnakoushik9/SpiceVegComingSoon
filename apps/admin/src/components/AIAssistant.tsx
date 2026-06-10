@@ -361,17 +361,36 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
 
     const cfg = statusConfig[engineState.status] || statusConfig.idle;
 
+    // Helper to format bytes to MB
+    const toMB = (b?: number) => b ? (b / (1024 * 1024)).toFixed(0) : '0';
+    const speedStr = engineState.speed ? `· ${engineState.speed.toFixed(1)} MB/s` : '';
+    const isCached = engineState.cached;
+
+    const progressText = engineState.status === 'loading' && engineState.percent !== undefined
+      ? `${isCached ? '🚀 Cache Load' : '⚡ Download'}: ${toMB(engineState.loaded)} / ${toMB(engineState.total)} MB (${engineState.percent}%) ${speedStr}`
+      : cfg.text;
+
     return (
-      <div className={`ai-engine-status ${cfg.cls}`}>
-        {cfg.icon}
-        <span className="text-[10.5px] font-medium truncate">{cfg.text}</span>
-        {engineState.status === 'error' && (
-          <button
-            onClick={() => litertEngine.initialize()}
-            className="ml-auto text-[10px] font-semibold text-leaf hover:text-forest underline"
-          >
-            Retry
-          </button>
+      <div className="flex flex-col border-b border-stone-100 bg-stone-50/50">
+        <div className={`ai-engine-status ${cfg.cls} border-none`} style={{ minHeight: '32px' }}>
+          {cfg.icon}
+          <span className="text-[10.5px] font-semibold truncate">{progressText}</span>
+          {engineState.status === 'error' && (
+            <button
+              onClick={() => litertEngine.initialize()}
+              className="ml-auto text-[10px] font-semibold text-leaf hover:text-forest underline"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+        {engineState.status === 'loading' && engineState.percent !== undefined && (
+          <div className="w-full h-1 bg-stone-200/60 relative">
+            <div 
+              className="h-full bg-emerald-500 transition-all duration-150 ease-out"
+              style={{ width: `${engineState.percent}%` }}
+            />
+          </div>
         )}
       </div>
     );

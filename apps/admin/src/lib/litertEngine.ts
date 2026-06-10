@@ -28,6 +28,11 @@ export interface EngineState {
   status: EngineStatus;
   progress?: string;
   error?: string;
+  percent?: number;    // download/load percentage (0-100)
+  speed?: number;      // load speed in MB/s
+  loaded?: number;     // loaded bytes
+  total?: number;      // total bytes
+  cached?: boolean;    // whether model was retrieved from cache
 }
 
 type StateListener = (state: EngineState) => void;
@@ -127,7 +132,7 @@ class LiteRTEngineManager {
   }
 
   private async _doInit(): Promise<void> {
-    this.setState({ status: 'checking', progress: 'Checking WebGPU support…' });
+    this.setState({ status: 'checking', progress: 'Checking WebGPU support…', percent: 0 });
 
     const supported = await this.checkSupport();
     if (!supported) {
@@ -138,14 +143,79 @@ class LiteRTEngineManager {
       return;
     }
 
-    this.setState({ status: 'loading', progress: 'Loading Gemma 4 E2B model… This may take a moment on first load.' });
+    this.setState({
+      status: 'loading',
+      progress: 'Connecting to model source…',
+      percent: 0,
+      speed: 0,
+      loaded: 0,
+      total: 0,
+    });
 
     try {
       const mod = await loadModule();
       const Engine = mod.Engine;
 
+      // 1. Fetch the model with progress tracking
+      const response = await fetch(MODEL_URL);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch model: HTTP ${response.status}`);
+      }
+
+      const totalBytes = +(response.headers.get('content-length') || 1999900000);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+
+      const startTime = Date.now();
+      let loadedBytes = 0;
+      
+      // Construct a new ReadableStream that intercepts read chunks to calculate progress/speed
+      const progressStream = new ReadableStream({
+        async start(controller) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                controller.close();
+                break;
+              }
+              if (value) {
+                loadedBytes += value.byteLength;
+                
+                // Calculate elapsed time and MB/s speed
+                const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
+                const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
+                const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+                
+                // If speed is extremely high (e.g. >100 MB/s), it is likely served from browser cache
+                const isCached = speedMBs > 100;
+
+                litertEngine.setState({
+                  status: 'loading',
+                  progress: isCached 
+                    ? `Reading from browser cache (${percent}%)` 
+                    : `Downloading model weights (${percent}%)`,
+                  percent,
+                  speed: speedMBs,
+                  loaded: loadedBytes,
+                  total: totalBytes,
+                  cached: isCached
+                });
+
+                controller.enqueue(value);
+              }
+            }
+          } catch (err) {
+            controller.error(err);
+          }
+        }
+      });
+
+      // 2. Initialize the Engine with the tracked stream
       this.engine = await Engine.create({
-        model: MODEL_URL,
+        model: progressStream,
         mainExecutorSettings: {
           maxNumTokens: 4096,
         },
@@ -159,7 +229,13 @@ class LiteRTEngineManager {
         },
       });
 
-      this.setState({ status: 'ready', progress: 'Model loaded and ready.' });
+      this.setState({
+        status: 'ready',
+        progress: 'Model loaded and ready.',
+        percent: 100,
+        loaded: totalBytes,
+        total: totalBytes,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load model';
       console.error('LiteRT-LM initialization error:', e);
