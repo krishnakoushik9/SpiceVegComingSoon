@@ -32,7 +32,8 @@ export interface EngineState {
 
 type StateListener = (state: EngineState) => void;
 
-const MODEL_URL = '/models/gemma-4-E2B-it-web.litertlm';
+// Model served from HuggingFace CDN (Cloudflare Pages has a 25MB file limit)
+const MODEL_URL = 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm';
 
 // System prompt adapted from the Gemini worker prompt for local use
 const SYSTEM_PROMPT = `You are SpiceVeg Operations Assistant — an internal logistics copilot for the SpiceVeg seed-label admin panel.
