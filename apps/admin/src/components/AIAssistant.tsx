@@ -495,9 +495,22 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               <Cpu size={14} />
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-forest text-[13px] truncate flex items-center gap-1.5">
+              <div className="font-semibold text-forest text-[13px] truncate flex items-center gap-1.5 flex-wrap">
                 <span>Operations Assistant</span>
-                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 uppercase tracking-wide">V0.24</span>
+                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 uppercase tracking-wide shrink-0">V0.24</span>
+                <button
+                  type="button"
+                  onClick={() => litertEngine.toggleMode()}
+                  disabled={engineState.status === 'checking'}
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 shrink-0 select-none ${
+                    engineState.mode === 'speed'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                      : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                  }`}
+                  title={engineState.mode === 'speed' ? 'Switch to Basic (Single Stream)' : 'Switch to Speed (Parallel Ranges)'}
+                >
+                  <span>⚡ {engineState.mode === 'speed' ? 'Speed' : 'Basic'}</span>
+                </button>
               </div>
               <div className="text-[10px] text-stone-400 uppercase tracking-widest font-semibold flex items-center gap-1">
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${

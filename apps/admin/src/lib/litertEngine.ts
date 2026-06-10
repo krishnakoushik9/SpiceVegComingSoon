@@ -33,6 +33,7 @@ export interface EngineState {
   loaded?: number;     // loaded bytes
   total?: number;      // total bytes
   cached?: boolean;    // whether model was retrieved from cache
+  mode?: 'basic' | 'speed'; // active download mode
 }
 
 type StateListener = (state: EngineState) => void;
@@ -90,9 +91,20 @@ Output rules:
 class LiteRTEngineManager {
   private engine: any = null;
   private conversation: any = null;
-  private state: EngineState = { status: 'idle' };
+  private state: EngineState = { status: 'idle', mode: 'basic' };
   private listeners: Set<StateListener> = new Set();
   private initPromise: Promise<void> | null = null;
+  private downloadMode: 'basic' | 'speed' = 'basic';
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('spiceveg_ai_download_mode');
+      if (saved === 'basic' || saved === 'speed') {
+        this.downloadMode = saved;
+        this.state.mode = saved;
+      }
+    }
+  }
 
   subscribe(listener: StateListener): () => void {
     this.listeners.add(listener);
@@ -107,6 +119,35 @@ class LiteRTEngineManager {
 
   getState(): EngineState {
     return this.state;
+  }
+
+  getDownloadMode(): 'basic' | 'speed' {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('spiceveg_ai_download_mode');
+      if (saved === 'basic' || saved === 'speed') {
+        this.downloadMode = saved;
+      }
+    }
+    return this.downloadMode;
+  }
+
+  setDownloadMode(mode: 'basic' | 'speed') {
+    this.downloadMode = mode;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('spiceveg_ai_download_mode', mode);
+    }
+    this.setState({ ...this.state, mode });
+  }
+
+  async toggleMode(): Promise<void> {
+    const currentMode = this.getDownloadMode();
+    const nextMode = currentMode === 'basic' ? 'speed' : 'basic';
+    this.setDownloadMode(nextMode);
+
+    // Cancel initialization and destroy engine to trigger a clean restart
+    await this.destroy();
+    this.initPromise = null;
+    await this.initialize();
   }
 
   /** Check if WebGPU is available */
@@ -132,13 +173,15 @@ class LiteRTEngineManager {
   }
 
   private async _doInit(): Promise<void> {
-    this.setState({ status: 'checking', progress: 'Checking WebGPU support…', percent: 0 });
+    const activeMode = this.getDownloadMode();
+    this.setState({ status: 'checking', progress: 'Checking WebGPU support…', percent: 0, mode: activeMode });
 
     const supported = await this.checkSupport();
     if (!supported) {
       this.setState({
         status: 'unsupported',
         error: 'WebGPU is not available in this browser. Please use Chrome 113+ or Edge 113+.',
+        mode: activeMode,
       });
       return;
     }
@@ -150,6 +193,7 @@ class LiteRTEngineManager {
       speed: 0,
       loaded: 0,
       total: 0,
+      mode: activeMode,
     });
 
     try {
@@ -160,7 +204,7 @@ class LiteRTEngineManager {
       let cache: Cache | null = null;
       let cachedResponse: Response | undefined;
 
-      // Try checking if model is already stored in the browser's persistent Cache Storage
+      // Try checking Cache Storage
       try {
         if (typeof window !== 'undefined' && 'caches' in window) {
           cache = await caches.open(CACHE_NAME);
@@ -170,31 +214,21 @@ class LiteRTEngineManager {
         console.warn('Cache Storage access blocked or unavailable:', cacheAccessErr);
       }
 
-      let response: Response;
-      let isFromCache = false;
+      let modelBlob: Blob;
 
       if (cachedResponse) {
-        response = cachedResponse;
-        isFromCache = true;
-      } else {
-        response = await fetch(MODEL_URL);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch model: HTTP ${response.status}`);
+        // Read from cache with progress
+        console.log('Model found in Cache Storage!');
+        const totalBytes = +(cachedResponse.headers.get('content-length') || 1914992384);
+        const reader = cachedResponse.body?.getReader();
+        if (!reader) {
+          throw new Error('Cache response body is not readable');
         }
-        isFromCache = false;
-      }
 
-      const totalBytes = +(response.headers.get('content-length') || 1999900000);
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable');
-      }
+        const startTime = Date.now();
+        let loadedBytes = 0;
+        const chunks: Uint8Array[] = [];
 
-      const startTime = Date.now();
-      let loadedBytes = 0;
-      const chunks: Uint8Array[] = [];
-
-      try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -205,44 +239,155 @@ class LiteRTEngineManager {
             const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
             const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
 
-            litertEngine.setState({
+            this.setState({
               status: 'loading',
-              progress: isFromCache 
-                ? `Reading from local cache (${percent}%)` 
-                : `Downloading model weights (${percent}%)`,
+              progress: `Reading from local cache (${percent}%)`,
               percent,
               speed: speedMBs,
               loaded: loadedBytes,
               total: totalBytes,
-              cached: isFromCache
+              cached: true,
+              mode: activeMode,
             });
           }
         }
-      } catch (err) {
-        throw new Error(`Model load failed: ${err instanceof Error ? err.message : err}`);
-      }
+        modelBlob = new Blob(chunks as any, { type: 'application/octet-stream' });
+        chunks.length = 0; // Clear immediately
+      } else {
+        // Fetch from network using basic or speed mode
+        console.log(`Fetching model from CDN using ${activeMode} mode...`);
+        let totalBytes = 1914992384; // Fallback size
 
-      // Combine chunks into a single Blob
-      const modelBlob = new Blob(chunks as any, { type: 'application/octet-stream' });
-      
-      // Clear chunks array immediately to free heavy RAM before engine allocation
-      chunks.length = 0;
-
-      // If downloaded from network, asynchronously persist it to Cache Storage
-      if (!isFromCache && cache) {
+        // Get file size from headers first
         try {
-          await cache.put(MODEL_URL, new Response(modelBlob, {
-            headers: {
-              'content-type': 'application/octet-stream',
-              'content-length': modelBlob.size.toString()
+          const headResponse = await fetch(MODEL_URL, { method: 'HEAD' });
+          const cl = headResponse.headers.get('content-length');
+          if (cl) totalBytes = parseInt(cl, 10);
+        } catch (e) {
+          console.warn('Failed to fetch head content-length, using fallback size:', e);
+        }
+
+        if (activeMode === 'speed') {
+          // Speed Mode: Parallel multi-part downloads using HTTP Range
+          const numChunks = 4;
+          const chunkSize = Math.ceil(totalBytes / numChunks);
+          const chunkPromises: Promise<Uint8Array>[] = [];
+          const chunkLoaded = new Array(numChunks).fill(0);
+          const startTime = Date.now();
+
+          for (let i = 0; i < numChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min((i + 1) * chunkSize - 1, totalBytes - 1);
+
+            const chunkPromise = (async () => {
+              const response = await fetch(MODEL_URL, {
+                headers: { Range: `bytes=${start}-${end}` }
+              });
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status} fetching range ${start}-${end}`);
+              }
+              const reader = response.body?.getReader();
+              if (!reader) throw new Error('ReadableStream not supported on chunk body');
+
+              const chunksList: Uint8Array[] = [];
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) {
+                  chunksList.push(value);
+                  chunkLoaded[i] += value.byteLength;
+
+                  // Update progress based on aggregate parallel load
+                  const totalLoaded = chunkLoaded.reduce((a, b) => a + b, 0);
+                  const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
+                  const speedMBs = (totalLoaded / (1024 * 1024)) / elapsedSeconds;
+                  const percent = Math.min(100, Math.round((totalLoaded / totalBytes) * 100));
+
+                  litertEngine.setState({
+                    status: 'loading',
+                    progress: `Downloading weights (Speed Mode) (${percent}%)`,
+                    percent,
+                    speed: speedMBs,
+                    loaded: totalLoaded,
+                    total: totalBytes,
+                    cached: false,
+                    mode: 'speed'
+                  });
+                }
+              }
+
+              const chunkBuffer = new Uint8Array(chunkLoaded[i]);
+              let offset = 0;
+              for (const u8 of chunksList) {
+                chunkBuffer.set(u8, offset);
+                offset += u8.length;
+              }
+              return chunkBuffer;
+            })();
+
+            chunkPromises.push(chunkPromise);
+          }
+
+          const chunkBuffers = await Promise.all(chunkPromises);
+          modelBlob = new Blob(chunkBuffers as any, { type: 'application/octet-stream' });
+        } else {
+          // Basic Mode: Standard single connection fetch
+          const response = await fetch(MODEL_URL);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch model: HTTP ${response.status}`);
+          }
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('Response body is not readable');
+          }
+
+          const startTime = Date.now();
+          let loadedBytes = 0;
+          const chunks: Uint8Array[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              chunks.push(value);
+              loadedBytes += value.byteLength;
+              const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
+              const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
+              const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+
+              this.setState({
+                status: 'loading',
+                progress: `Downloading weights (Basic Mode) (${percent}%)`,
+                percent,
+                speed: speedMBs,
+                loaded: loadedBytes,
+                total: totalBytes,
+                cached: false,
+                mode: 'basic',
+              });
             }
-          }));
-        } catch (saveCacheErr) {
-          console.warn('Failed to store downloaded model in Cache Storage:', saveCacheErr);
+          }
+          modelBlob = new Blob(chunks as any, { type: 'application/octet-stream' });
+          chunks.length = 0;
+        }
+
+        // Cache downloaded model for next reload
+        if (cache) {
+          try {
+            await cache.put(MODEL_URL, new Response(modelBlob, {
+              headers: {
+                'content-type': 'application/octet-stream',
+                'content-length': modelBlob.size.toString()
+              }
+            }));
+            console.log('Model successfully saved to Cache Storage.');
+          } catch (saveCacheErr) {
+            console.warn('Failed to store downloaded model in Cache Storage:', saveCacheErr);
+          }
         }
       }
 
-      // 2. Initialize the Engine with the fully loaded Blob
+      // Initialize the Engine
       this.engine = await Engine.create({
         model: modelBlob,
         mainExecutorSettings: {
@@ -262,13 +407,14 @@ class LiteRTEngineManager {
         status: 'ready',
         progress: 'Model loaded and ready.',
         percent: 100,
-        loaded: totalBytes,
-        total: totalBytes,
+        loaded: modelBlob.size,
+        total: modelBlob.size,
+        mode: activeMode,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load model';
       console.error('LiteRT-LM initialization error:', e);
-      this.setState({ status: 'error', error: msg });
+      this.setState({ status: 'error', error: msg, mode: activeMode });
     }
   }
 
@@ -326,7 +472,7 @@ class LiteRTEngineManager {
       }
       this.engine = null;
       this.conversation = null;
-      this.setState({ status: 'idle' });
+      this.setState({ status: 'idle', mode: this.getDownloadMode() });
     }
   }
 }
