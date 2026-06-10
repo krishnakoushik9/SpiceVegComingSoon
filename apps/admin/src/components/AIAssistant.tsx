@@ -497,7 +497,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
             <div className="min-w-0">
               <div className="font-semibold text-forest text-[13px] truncate flex items-center gap-1.5 flex-wrap">
                 <span>Operations Assistant</span>
-                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 uppercase tracking-wide shrink-0">V0.24</span>
+                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 uppercase tracking-wide shrink-0">V0.25</span>
                 <button
                   type="button"
                   onClick={() => litertEngine.toggleMode()}
