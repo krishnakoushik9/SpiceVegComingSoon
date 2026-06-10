@@ -495,7 +495,10 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ lots, onOpenLot, onApp
               <Cpu size={14} />
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-forest text-[13px] truncate">Operations Assistant</div>
+              <div className="font-semibold text-forest text-[13px] truncate flex items-center gap-1.5">
+                <span>Operations Assistant</span>
+                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 uppercase tracking-wide">V0.23</span>
+              </div>
               <div className="text-[10px] text-stone-400 uppercase tracking-widest font-semibold flex items-center gap-1">
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${
                   engineState.status === 'ready' ? 'bg-emerald-500 animate-pulse' :

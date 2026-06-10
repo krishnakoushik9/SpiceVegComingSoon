@@ -156,64 +156,61 @@ class LiteRTEngineManager {
       const mod = await loadModule();
       const Engine = mod.Engine;
 
-      // 1. Fetch the model
+      // 1. Fetch the model and track progress manually
       const response = await fetch(MODEL_URL);
       if (!response.ok) {
         throw new Error(`Failed to fetch model: HTTP ${response.status}`);
       }
 
-      // Clone response to consume progress separately without interfering with Wasm engine reader
-      const progressResponse = response.clone();
-
       const totalBytes = +(response.headers.get('content-length') || 1999900000);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
 
-      // 2. Initialize the Engine with the native browser response body stream
-      // Using native body stream prevents Wasm assertion errors (RET_CHECK failures)
-      const enginePromise = Engine.create({
-        model: response.body,
+      const startTime = Date.now();
+      let loadedBytes = 0;
+      const chunks: Uint8Array[] = [];
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            loadedBytes += value.byteLength;
+            const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
+            const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
+            const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+            const isCached = speedMBs > 100;
+
+            litertEngine.setState({
+              status: 'loading',
+              progress: isCached 
+                ? `Reading from browser cache (${percent}%)` 
+                : `Downloading model weights (${percent}%)`,
+              percent,
+              speed: speedMBs,
+              loaded: loadedBytes,
+              total: totalBytes,
+              cached: isCached
+            });
+          }
+        }
+      } catch (err) {
+        throw new Error(`Model download failed: ${err instanceof Error ? err.message : err}`);
+      }
+
+      // Combine chunks into a single Blob to prevent stream parsing conflicts (RET_CHECK failures)
+      const modelBlob = new Blob(chunks as any, { type: 'application/octet-stream' });
+
+      // 2. Initialize the Engine with the fully loaded Blob
+      this.engine = await Engine.create({
+        model: modelBlob,
         mainExecutorSettings: {
           maxNumTokens: 4096,
         },
       });
-
-      // 3. Asynchronously read progressResponse to update progress state
-      const reader = progressResponse.body?.getReader();
-      if (reader) {
-        const startTime = Date.now();
-        let loadedBytes = 0;
-
-        (async () => {
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              if (value) {
-                loadedBytes += value.byteLength;
-                const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
-                const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
-                const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-                const isCached = speedMBs > 100;
-
-                litertEngine.setState({
-                  status: 'loading',
-                  progress: isCached 
-                    ? `Reading from browser cache (${percent}%)` 
-                    : `Downloading model weights (${percent}%)`,
-                  percent,
-                  speed: speedMBs,
-                  loaded: loadedBytes,
-                  total: totalBytes,
-                  cached: isCached
-                });
-              }
-            }
-          } catch (err) {
-            console.warn('Asynchronous progress reading warning:', err);
-          }
-        })();
-      }
-
-      this.engine = await enginePromise;
 
       this.conversation = await this.engine.createConversation({
         preface: {
