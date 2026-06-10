@@ -156,10 +156,32 @@ class LiteRTEngineManager {
       const mod = await loadModule();
       const Engine = mod.Engine;
 
-      // 1. Fetch the model and track progress manually
-      const response = await fetch(MODEL_URL);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch model: HTTP ${response.status}`);
+      const CACHE_NAME = 'litert-model-cache-v1';
+      let cache: Cache | null = null;
+      let cachedResponse: Response | undefined;
+
+      // Try checking if model is already stored in the browser's persistent Cache Storage
+      try {
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          cache = await caches.open(CACHE_NAME);
+          cachedResponse = await cache.match(MODEL_URL);
+        }
+      } catch (cacheAccessErr) {
+        console.warn('Cache Storage access blocked or unavailable:', cacheAccessErr);
+      }
+
+      let response: Response;
+      let isFromCache = false;
+
+      if (cachedResponse) {
+        response = cachedResponse;
+        isFromCache = true;
+      } else {
+        response = await fetch(MODEL_URL);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch model: HTTP ${response.status}`);
+        }
+        isFromCache = false;
       }
 
       const totalBytes = +(response.headers.get('content-length') || 1999900000);
@@ -182,27 +204,43 @@ class LiteRTEngineManager {
             const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
             const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
             const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-            const isCached = speedMBs > 100;
 
             litertEngine.setState({
               status: 'loading',
-              progress: isCached 
-                ? `Reading from browser cache (${percent}%)` 
+              progress: isFromCache 
+                ? `Reading from local cache (${percent}%)` 
                 : `Downloading model weights (${percent}%)`,
               percent,
               speed: speedMBs,
               loaded: loadedBytes,
               total: totalBytes,
-              cached: isCached
+              cached: isFromCache
             });
           }
         }
       } catch (err) {
-        throw new Error(`Model download failed: ${err instanceof Error ? err.message : err}`);
+        throw new Error(`Model load failed: ${err instanceof Error ? err.message : err}`);
       }
 
-      // Combine chunks into a single Blob to prevent stream parsing conflicts (RET_CHECK failures)
+      // Combine chunks into a single Blob
       const modelBlob = new Blob(chunks as any, { type: 'application/octet-stream' });
+      
+      // Clear chunks array immediately to free heavy RAM before engine allocation
+      chunks.length = 0;
+
+      // If downloaded from network, asynchronously persist it to Cache Storage
+      if (!isFromCache && cache) {
+        try {
+          await cache.put(MODEL_URL, new Response(modelBlob, {
+            headers: {
+              'content-type': 'application/octet-stream',
+              'content-length': modelBlob.size.toString()
+            }
+          }));
+        } catch (saveCacheErr) {
+          console.warn('Failed to store downloaded model in Cache Storage:', saveCacheErr);
+        }
+      }
 
       // 2. Initialize the Engine with the fully loaded Blob
       this.engine = await Engine.create({
