@@ -112,9 +112,9 @@ class LiteRTEngineManager {
     return () => this.listeners.delete(listener);
   }
 
-  private setState(newState: EngineState) {
-    this.state = newState;
-    this.listeners.forEach((fn) => fn(newState));
+  private setState(newState: Partial<EngineState>) {
+    this.state = { ...this.state, ...newState };
+    this.listeners.forEach((fn) => fn(this.state));
   }
 
   getState(): EngineState {
