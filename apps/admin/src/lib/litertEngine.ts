@@ -156,40 +156,42 @@ class LiteRTEngineManager {
       const mod = await loadModule();
       const Engine = mod.Engine;
 
-      // 1. Fetch the model with progress tracking
+      // 1. Fetch the model
       const response = await fetch(MODEL_URL);
       if (!response.ok) {
         throw new Error(`Failed to fetch model: HTTP ${response.status}`);
       }
 
-      const totalBytes = +(response.headers.get('content-length') || 1999900000);
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable');
-      }
+      // Clone response to consume progress separately without interfering with Wasm engine reader
+      const progressResponse = response.clone();
 
-      const startTime = Date.now();
-      let loadedBytes = 0;
-      
-      // Construct a new ReadableStream that intercepts read chunks to calculate progress/speed
-      const progressStream = new ReadableStream({
-        async start(controller) {
+      const totalBytes = +(response.headers.get('content-length') || 1999900000);
+
+      // 2. Initialize the Engine with the native browser response body stream
+      // Using native body stream prevents Wasm assertion errors (RET_CHECK failures)
+      const enginePromise = Engine.create({
+        model: response.body,
+        mainExecutorSettings: {
+          maxNumTokens: 4096,
+        },
+      });
+
+      // 3. Asynchronously read progressResponse to update progress state
+      const reader = progressResponse.body?.getReader();
+      if (reader) {
+        const startTime = Date.now();
+        let loadedBytes = 0;
+
+        (async () => {
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) {
-                controller.close();
-                break;
-              }
+              if (done) break;
               if (value) {
                 loadedBytes += value.byteLength;
-                
-                // Calculate elapsed time and MB/s speed
                 const elapsedSeconds = (Date.now() - startTime) / 1000 || 0.001;
                 const speedMBs = (loadedBytes / (1024 * 1024)) / elapsedSeconds;
                 const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-                
-                // If speed is extremely high (e.g. >100 MB/s), it is likely served from browser cache
                 const isCached = speedMBs > 100;
 
                 litertEngine.setState({
@@ -203,23 +205,15 @@ class LiteRTEngineManager {
                   total: totalBytes,
                   cached: isCached
                 });
-
-                controller.enqueue(value);
               }
             }
           } catch (err) {
-            controller.error(err);
+            console.warn('Asynchronous progress reading warning:', err);
           }
-        }
-      });
+        })();
+      }
 
-      // 2. Initialize the Engine with the tracked stream
-      this.engine = await Engine.create({
-        model: progressStream,
-        mainExecutorSettings: {
-          maxNumTokens: 4096,
-        },
-      });
+      this.engine = await enginePromise;
 
       this.conversation = await this.engine.createConversation({
         preface: {
